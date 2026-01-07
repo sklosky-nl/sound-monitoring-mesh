@@ -86,14 +86,17 @@ The system consists of three main components:
 ### 3.1 ESP32 Device Architecture
 
 #### Hardware Components
-- **ESP32 Microcontroller**
-  - Dual-core 240 MHz processor
+- **ESP32-C3 Microcontroller (Purchased)**
+  - Single-core RISC-V 160 MHz processor
   - WiFi 802.11 b/g/n (2.4 GHz)
-  - I2S interface for digital microphone connection
+  - Bluetooth 5.0 LE
+  - I2S interface for digital microphone connection (to be verified)
   - GPIO pins for sensor connections
-  - I2S pins: I2S_BCLK (Bit Clock), I2S_WS (Word Select), I2S_DOUT (Data Out)
+  - USB-C interface
+  - **Status:** 10 units purchased, awaiting delivery
 
-- **Audio Input - MH-ET LIVE INMP441 I2S Digital Microphone Module**
+- **Audio Input - MH-ET LIVE INMP441 I2S Digital Microphone Module (Purchased)**
+  - **Status:** ✅ 10 units purchased, awaiting delivery
   - **Module Specifications:**
     - Omnidirectional MEMS microphone
     - Low noise, high precision design
@@ -104,14 +107,15 @@ The system consists of three main components:
     - Bit depth: 24-bit
     - Signal-to-Noise Ratio (SNR): 65 dB
     - Sensitivity: -26 dBFS
-  - **Pin Connections (INMP441 to ESP32):**
-    - VDD → ESP32 3.3V
-    - GND → ESP32 GND
-    - SCK (Serial Clock) → ESP32 I2S_BCLK (e.g., GPIO 26)
-    - WS (Word Select) → ESP32 I2S_WS (e.g., GPIO 25)
-    - SD (Serial Data) → ESP32 I2S_DOUT (e.g., GPIO 22)
-    - L/R (Left/Right select) → ESP32 GND (for mono/left channel)
+  - **Pin Connections (INMP441 to ESP32-C3 - To Be Verified):**
+    - VDD → ESP32-C3 3.3V (verify pin)
+    - GND → ESP32-C3 GND
+    - SCK (Serial Clock) → ESP32-C3 I2S_BCLK (GPIO TBD - verify)
+    - WS (Word Select) → ESP32-C3 I2S_WS (GPIO TBD - verify)
+    - SD (Serial Data) → ESP32-C3 I2S_DATA (GPIO TBD - verify)
+    - L/R (Left/Right select) → ESP32-C3 GND (for mono/left channel)
   - **Connection Type:** Direct I2S digital connection (no analog components required)
+  - **Action Required:** Verify I2S peripheral availability and GPIO pin assignments on ESP32-C3 once hardware is received
 
 - **Power Supply**
   - USB power (5V) or external power adapter

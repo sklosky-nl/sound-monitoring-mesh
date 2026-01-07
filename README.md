@@ -1,6 +1,8 @@
 # Sound Level Mesh System
 
-A distributed sound monitoring system consisting of 10 ESP32-based WiFi sensor devices that communicate with a central web server to monitor, analyze, and report sound levels and frequency band measurements.
+A distributed sound monitoring system consisting of 10 ESP32-C3-based WiFi sensor devices that communicate with a central web server to monitor, analyze, and report sound levels and frequency band measurements.
+
+**Hardware Status:** All hardware components have been purchased and are awaiting delivery (January 2026).
 
 ## 📋 Project Status
 
@@ -13,9 +15,15 @@ This project is currently in the **design and planning phase**. All system requi
 - ✅ System Architecture Document
 - ✅ Hardware Design Document
 - ✅ Technical specifications and design decisions
+- ✅ **Hardware Purchased** (awaiting delivery - January 2026)
+  - 10 × ESP32-C3 Super Mini Development Boards
+  - 10 × MH-ET LIVE INMP441 I2S Microphone Modules
+  - 10 × USB Wall Charger Adapters
+  - 12 × USB-C Charging Cables
 
 ### What's Next
-- ⏳ ESP32 firmware development (ESP-IDF)
+- ⏳ Hardware delivery and verification (ESP32-C3 I2S pin verification)
+- ⏳ ESP32-C3 firmware development (ESP-IDF)
 - ⏳ Backend API server development
 - ⏳ Frontend web application development
 - ⏳ Hardware assembly and testing
@@ -65,9 +73,11 @@ Hardware specifications including:
 ## 🛠️ Technology Stack
 
 ### Hardware
-- **Microcontroller:** ESP32 (ESP32-WROOM-32)
-- **Microphone:** MH-ET LIVE INMP441 I2S Digital Microphone Module
+- **Microcontroller:** ESP32-C3 Super Mini Development Board (4MB flash) - ✅ **10 units purchased**
+- **Microphone:** MH-ET LIVE INMP441 I2S Digital Microphone Module - ✅ **10 units purchased**
+- **Power:** USB Wall Chargers + USB-C Cables - ✅ **10 chargers, 12 cables purchased**
 - **Quantity:** 10 monitoring devices
+- **Status:** Hardware purchased, awaiting delivery (January 2026)
 
 ### Firmware
 - **Framework:** ESP-IDF (Espressif IoT Development Framework)
@@ -149,10 +159,12 @@ Review the [Product Requirements Document](sound%20level%20mesh%20system%20PRD.m
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Documentation | ✅ Complete | All design documents finalized |
-| ESP32 Firmware | ⏳ Not Started | ESP-IDF development pending |
+| Hardware Purchase | ✅ Complete | All components purchased, awaiting delivery |
+| Hardware Verification | ⏳ Pending | ESP32-C3 I2S pins need verification upon receipt |
+| ESP32-C3 Firmware | ⏳ Not Started | ESP-IDF development pending hardware verification |
 | Backend API | ⏳ Not Started | Technology stack TBD |
 | Frontend Web App | ⏳ Not Started | Framework TBD |
-| Hardware Assembly | ⏳ Not Started | Components specified, not assembled |
+| Hardware Assembly | ⏳ Not Started | Awaiting hardware delivery |
 | Testing | ⏳ Not Started | Test plans to be developed |
 
 ## 🤝 Contributing

@@ -11,54 +11,94 @@
 
 ## 1. Executive Summary
 
-This document describes the hardware design for the Sound Level Mesh System monitoring devices. Each device consists of an ESP32 microcontroller connected to an MH-ET LIVE INMP441 I2S Digital Microphone Module. The system requires 10 identical monitoring devices communicating via WiFi to a central web server.
+This document describes the hardware design for the Sound Level Mesh System monitoring devices. Each device consists of an ESP32-C3 microcontroller connected to an MH-ET LIVE INMP441 I2S Digital Microphone Module. The system requires 10 identical monitoring devices communicating via WiFi to a central web server.
 
 ### Hardware Components
-- **Microcontroller:** ESP32 development board
+- **Microcontroller:** ESP32-C3 Development Board (4MB flash)
 - **Microphone Module:** MH-ET LIVE INMP441 I2S Digital Microphone Module
-- **Power Supply:** USB (5V) or external power adapter
-- **Enclosure:** Weather-resistant housing
+- **Power Supply:** USB Wall Charger Adapter (5V)
+- **Power Cable:** USB-C Charging Cable
+- **Enclosure:** Weather-resistant housing (to be determined)
+
+### Purchased Hardware Status
+
+**Hardware has been purchased and is awaiting delivery (Order Date: January 4, 2026).**
+
+**Purchased Components:**
+- ✅ **ESP32-C3 Development Boards:** 10 units (Simple Robot Store)
+  - Model: ESP32-C3 Super Mini Development Board
+  - Flash: 4MB
+  - WiFi + Bluetooth
+  - Total Cost: $21.79
+  
+- ✅ **MH-ET LIVE INMP441 I2S Microphone Modules:** 10 units (YX Electronic Components)
+  - Omnidirectional MEMS microphone
+  - I2S digital interface
+  - Total Cost: $21.90 (10 × $2.19)
+  
+- ✅ **USB Wall Charger Adapters:** 10 units (Singyo Store)
+  - 5 Pack × 2 orders = 10 total units
+  - US Plug, Fast Charging
+  - Total Cost: $8.62 (2 × $4.55)
+  
+- ✅ **USB-C Charging Cables:** 12 units (Super Deals Wholesale Factory Store)
+  - 3 Pack × 4 orders = 12 total units
+  - 1M length, 6A 100W Type C
+  - Total Cost: $7.41 (4 × $1.99)
+
+**Total Hardware Cost:** ~$59.72
+
+**Note:** ESP32-C3 is a RISC-V based single-core microcontroller, different from the dual-core Xtensa-based ESP32. The specifications and pin assignments in this document will need to be verified against the ESP32-C3's actual capabilities and pinout.
 
 ---
 
 ## 2. Component Specifications
 
-### 2.1 ESP32 Microcontroller
+### 2.1 ESP32-C3 Microcontroller
 
-#### Recommended Development Board
-- **Model:** ESP32 DevKit V1 or similar
-- **Chip:** ESP32-WROOM-32 or ESP32-WROOM-32E
+#### Purchased Development Board
+- **Model:** ESP32-C3 Super Mini Development Board (Purchased)
+- **Chip:** ESP32-C3
 - **Processor:** 
-  - Dual-core Xtensa LX6 microprocessor
-  - Clock frequency: 240 MHz
-  - 32-bit architecture
+  - Single-core RISC-V microprocessor
+  - Clock frequency: 160 MHz
+  - 32-bit RISC-V architecture
 - **Memory:**
-  - Flash: 4 MB (minimum), 16 MB (recommended)
-  - SRAM: 520 KB
-  - ROM: 448 KB
+  - Flash: 4 MB (as purchased)
+  - SRAM: 400 KB
+  - ROM: 384 KB
 - **WiFi:**
   - 802.11 b/g/n (2.4 GHz)
   - WPA2/WPA3 support
-- **GPIO Pins:** 34 programmable GPIO pins
-- **I2S Interface:** Built-in I2S peripheral
+- **Bluetooth:** Bluetooth 5.0 LE
+- **GPIO Pins:** 21 programmable GPIO pins
+- **I2S Interface:** Built-in I2S peripheral (to be verified)
 - **Power:**
   - Operating voltage: 3.3V
-  - Input voltage: 5V (via USB) or 3.3V-5V (via VIN)
-  - Current consumption: ~80-260 mA (active), ~10 µA (deep sleep)
-- **Dimensions:** ~52mm × 27mm (typical DevKit board)
+  - Input voltage: 5V (via USB-C)
+  - Current consumption: ~80-160 mA (active), ~10 µA (deep sleep)
+- **USB:** USB-C interface
+- **Dimensions:** Smaller form factor than standard ESP32 DevKit
 
-#### ESP32 Pinout (Relevant Pins)
+**Important Note:** ESP32-C3 uses a different architecture (RISC-V) and has different pin assignments than the standard ESP32. The I2S pin assignments and GPIO numbers will need to be verified against the specific ESP32-C3 board's pinout once hardware is received.
+
+#### ESP32-C3 Pinout (Relevant Pins - To Be Verified)
+
+**Note:** Pin assignments below are preliminary and must be verified against the actual ESP32-C3 Super Mini board pinout once hardware is received.
+
 - **Power Pins:**
-  - VIN: 5V input (when not using USB)
-  - 3.3V: 3.3V output
+  - USB-C: 5V input (via USB-C cable)
+  - 3.3V: 3.3V output (if available on board)
   - GND: Ground
-- **I2S Pins (for INMP441 connection):**
-  - GPIO 22: I2S_DATA (Serial Data)
-  - GPIO 25: I2S_WS (Word Select / Left-Right Clock)
-  - GPIO 26: I2S_BCLK (Bit Clock / Serial Clock)
+- **I2S Pins (for INMP441 connection - to be verified):**
+  - I2S_DATA: TBD (verify GPIO pin)
+  - I2S_WS: TBD (verify GPIO pin)
+  - I2S_BCLK: TBD (verify GPIO pin)
 - **Other Useful Pins:**
-  - GPIO 0: Boot button (optional)
-  - GPIO 2: Built-in LED (optional, for status indication)
+  - Boot button: TBD (verify GPIO pin)
+  - Built-in LED: TBD (verify GPIO pin, if available)
+
+**Action Required:** Once hardware is received, verify I2S peripheral availability and GPIO pin assignments for the ESP32-C3 Super Mini board.
 
 ### 2.2 MH-ET LIVE INMP441 I2S Digital Microphone Module
 
@@ -88,29 +128,36 @@ This document describes the hardware design for the Sound Level Mesh System moni
 
 ## 3. Wiring Diagram and Connections
 
-### 3.1 INMP441 to ESP32 Connection
+### 3.1 INMP441 to ESP32-C3 Connection
+
+**Note:** Pin assignments are preliminary and must be verified once ESP32-C3 hardware is received.
 
 ```
-INMP441 Module          ESP32 DevKit
+INMP441 Module          ESP32-C3 Board
 ─────────────────       ────────────────
-VDD              ──────> 3.3V
+VDD              ──────> 3.3V (verify pin)
 GND              ──────> GND
-SCK              ──────> GPIO 26 (I2S_BCLK)
-WS               ──────> GPIO 25 (I2S_WS)
-SD               ──────> GPIO 22 (I2S_DATA)
+SCK              ──────> GPIO X (I2S_BCLK - to be determined)
+WS               ──────> GPIO Y (I2S_WS - to be determined)
+SD               ──────> GPIO Z (I2S_DATA - to be determined)
 L/R              ──────> GND (for mono/left channel)
 ```
 
-### 3.2 Detailed Pin Connections
+### 3.2 Detailed Pin Connections (To Be Verified)
 
-| INMP441 Pin | ESP32 Pin | Function | Notes |
-|-------------|-----------|----------|-------|
-| VDD | 3.3V | Power Supply | Use ESP32's 3.3V output |
+| INMP441 Pin | ESP32-C3 Pin | Function | Notes |
+|-------------|--------------|----------|-------|
+| VDD | 3.3V | Power Supply | Verify 3.3V output pin on ESP32-C3 board |
 | GND | GND | Ground | Common ground |
-| SCK | GPIO 26 | I2S Bit Clock | Serial clock signal |
-| WS | GPIO 25 | I2S Word Select | Left/Right channel select |
-| SD | GPIO 22 | I2S Serial Data | Audio data output |
+| SCK | GPIO TBD | I2S Bit Clock | Verify I2S peripheral and GPIO assignment |
+| WS | GPIO TBD | I2S Word Select | Verify I2S peripheral and GPIO assignment |
+| SD | GPIO TBD | I2S Serial Data | Verify I2S peripheral and GPIO assignment |
 | L/R | GND | Channel Select | Ground for left/mono channel |
+
+**Action Required:** Once ESP32-C3 boards are received, verify:
+1. I2S peripheral availability on ESP32-C3
+2. GPIO pin assignments for I2S on the specific board model
+3. 3.3V power output pin location
 
 ### 3.3 Power Connections
 
@@ -202,26 +249,34 @@ L/R              ──────> GND (for mono/left channel)
 
 ### 4.4 Assembly Steps
 
-1. **Prepare ESP32:**
-   - Ensure ESP32 DevKit is powered off
-   - Identify GPIO pins 22, 25, 26, 3.3V, and GND
+**Note:** These steps assume ESP32-C3 I2S pin assignments have been verified. Pin numbers are placeholders until hardware is received.
+
+1. **Prepare ESP32-C3:**
+   - Ensure ESP32-C3 board is powered off
+   - Identify I2S GPIO pins (to be verified), 3.3V output, and GND
+   - Review ESP32-C3 Super Mini board pinout documentation
 
 2. **Prepare INMP441:**
    - Identify module pins (VDD, GND, SCK, WS, SD, L/R)
    - Ensure module is clean and undamaged
+   - Verify module is from purchased batch
 
 3. **Make Connections:**
-   - Connect power first: VDD to 3.3V, GND to GND
-   - Connect I2S signals: SCK→GPIO26, WS→GPIO25, SD→GPIO22
+   - Connect power first: VDD to 3.3V (verify pin), GND to GND
+   - Connect I2S signals: SCK→GPIO (TBD), WS→GPIO (TBD), SD→GPIO (TBD)
    - Connect L/R to GND for mono operation
+   - Use purchased jumper wires for connections
 
 4. **Verify Connections:**
    - Double-check all connections
    - Ensure no short circuits
    - Verify power polarity
+   - Reference ESP32-C3 pinout diagram
 
 5. **Power On:**
-   - Connect USB or external power
+   - Connect USB-C cable to ESP32-C3
+   - Connect USB-C cable to purchased wall charger
+   - Plug wall charger into power outlet
    - Check for proper operation
 
 ---
@@ -268,14 +323,22 @@ L/R              ──────> GND (for mono/left channel)
 ### 6.1 Power Requirements
 
 **Total System Power:**
-- ESP32: 80-260 mA @ 3.3V (active mode)
+- ESP32-C3: 80-160 mA @ 3.3V (active mode)
 - INMP441: 1.2 mA @ 3.3V
-- **Total:** ~100-270 mA @ 3.3V
+- **Total:** ~100-170 mA @ 3.3V
 
-**Input Power Options:**
-1. **USB 5V:** Standard USB power (500 mA minimum)
-2. **External 5V:** Wall adapter or battery pack
-3. **3.3V Direct:** If using external 3.3V regulator
+**Purchased Power Supply:**
+- **USB Wall Charger Adapters:** 10 units purchased
+  - 5V output via USB port
+  - Fast charging capable
+  - US Plug
+  - Sufficient for ESP32-C3 + INMP441 power requirements
+
+**Input Power:**
+1. **USB-C Cable + Wall Charger (Purchased):** 
+   - USB-C cable (1M, 6A 100W capable) connects ESP32-C3 to wall charger
+   - Wall charger provides 5V power
+   - 12 cables purchased (2 extra for spares)
 
 ### 6.2 Power Supply Considerations
 
@@ -390,15 +453,21 @@ L/R              ──────> GND (for mono/left channel)
 
 ### 9.1 Required Components (Per Device)
 
-| Component | Part Number/Description | Quantity | Notes |
-|-----------|------------------------|----------|-------|
-| ESP32 DevKit | ESP32-WROOM-32 DevKit V1 | 1 | Or equivalent |
-| INMP441 Module | MH-ET LIVE INMP441 | 1 | I2S digital microphone |
-| USB Cable | USB-A to Micro-USB | 1 | For power/programming |
-| Power Adapter | 5V, 1A minimum | 1 | Optional, if not using USB |
-| Jumper Wires | 22-24 AWG | 6 | For connections |
-| Enclosure | Weather-resistant | 1 | IP54/IP65 rated |
-| Standoffs | M3, 10mm | 4 | For mounting (optional) |
+| Component | Part Number/Description | Quantity | Status |
+|-----------|------------------------|----------|--------|
+| ESP32-C3 Board | ESP32-C3 Super Mini (4MB flash) | 1 | ✅ Purchased (10 units) |
+| INMP441 Module | MH-ET LIVE INMP441 | 1 | ✅ Purchased (10 units) |
+| USB-C Cable | Type C, 1M, 6A 100W | 1 | ✅ Purchased (12 units total) |
+| USB Wall Charger | 5V Fast Charging, US Plug | 1 | ✅ Purchased (10 units) |
+| Jumper Wires | 22-24 AWG | 6 | ⏳ To be purchased |
+| Enclosure | Weather-resistant | 1 | ⏳ To be determined |
+| Standoffs | M3, 10mm | 4 | ⏳ Optional, to be purchased |
+
+**Purchased Hardware Summary:**
+- ✅ All 10 ESP32-C3 development boards
+- ✅ All 10 INMP441 microphone modules
+- ✅ All 10 USB wall chargers (with 2 extra cables)
+- ⏳ Jumper wires and enclosures still needed
 
 ### 9.2 Optional Components
 
@@ -449,11 +518,12 @@ L/R              ──────> GND (for mono/left channel)
 
 ### 10.2 Diagnostic Procedures
 
-**I2S Signal Verification:**
-1. Use oscilloscope to check I2S signals
-2. Verify clock frequency matches configuration
-3. Check data signal for activity
-4. Verify word select timing
+**I2S Signal Verification (if I2S available on ESP32-C3):**
+1. Verify I2S peripheral is available on ESP32-C3
+2. Use oscilloscope to check I2S signals (if available)
+3. Verify clock frequency matches configuration
+4. Check data signal for activity
+5. Verify word select timing
 
 **Power Verification:**
 1. Measure voltage at INMP441 VDD pin (should be 3.3V)
@@ -461,10 +531,11 @@ L/R              ──────> GND (for mono/left channel)
 3. Verify no voltage drops under load
 
 **Communication Test:**
-1. Use serial monitor to check ESP32 output
-2. Verify I2S data reception
+1. Use serial monitor to check ESP32-C3 output
+2. Verify I2S data reception (if I2S peripheral available)
 3. Check for error messages
-4. Test data transmission to server
+4. Test WiFi connectivity
+5. Test data transmission to server
 
 ---
 
@@ -517,12 +588,14 @@ L/R              ──────> GND (for mono/left channel)
 
 ### A. Pin Reference Tables
 
-**ESP32 GPIO Pin Functions:**
-- GPIO 22: I2S_DATA (Input)
-- GPIO 25: I2S_WS (Input)
-- GPIO 26: I2S_BCLK (Input)
-- GPIO 0: Boot button (Input, pull-up)
-- GPIO 2: Built-in LED (Output)
+**ESP32-C3 GPIO Pin Functions (To Be Verified):**
+- I2S_DATA: GPIO TBD (Input) - Verify pin assignment
+- I2S_WS: GPIO TBD (Input) - Verify pin assignment
+- I2S_BCLK: GPIO TBD (Input) - Verify pin assignment
+- Boot button: GPIO TBD (Input, pull-up) - Verify pin assignment
+- Built-in LED: GPIO TBD (Output) - Verify if available
+
+**Note:** ESP32-C3 has different GPIO pin assignments than standard ESP32. Pin assignments must be verified against the actual ESP32-C3 Super Mini board documentation once hardware is received.
 
 **INMP441 Pin Functions:**
 - VDD: Power (3.3V)

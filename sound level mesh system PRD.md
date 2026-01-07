@@ -302,37 +302,43 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 
 ### 5.3 Hardware Requirements
 
-#### H1: ESP32 Sensor Device Specifications
+#### H1: ESP32-C3 Sensor Device Specifications
 **Priority:** P0 (Critical)
 
 **Requirements:**
-- **Processing:** ESP32 microcontroller (dual-core, 240 MHz)
-- **Memory:** Minimum 4 MB flash, 520 KB SRAM
+- **Processing:** ESP32-C3 microcontroller (single-core RISC-V, 160 MHz)
+  - **Status:** ✅ 10 units purchased (ESP32-C3 Super Mini, 4MB flash)
+- **Memory:** 4 MB flash (as purchased), 400 KB SRAM
 - **Connectivity:** 
   - WiFi: 802.11 b/g/n (2.4 GHz)
+  - Bluetooth: 5.0 LE
   - Support for WPA2/WPA3 security
 - **Power:**
-  - USB power or external power supply (5V)
+  - USB-C power via wall charger adapter
+  - **Status:** ✅ 10 USB wall chargers and 12 USB-C cables purchased
   - Power consumption: < 500 mW average
 - **Sensors:**
   - Microphone: MH-ET LIVE INMP441 I2S Digital Microphone Module
+    - **Status:** ✅ 10 units purchased
     - Omnidirectional MEMS microphone
     - Low noise, high precision
     - I2S digital interface (no ADC required)
     - PDM (Pulse Density Modulation) output converted to I2S
 - **Audio Processing:**
   - FFT capability for frequency band analysis
-  - Real-time audio sampling via I2S interface
+  - Real-time audio sampling via I2S interface (to be verified on ESP32-C3)
   - Sampling rate: 16 kHz (INMP441 supports up to 48 kHz)
   - 24-bit audio data processing
 - **Enclosure:** Weather-resistant (IP54 minimum recommended)
-- **Size:** Standard ESP32 development board form factor
+  - **Status:** ⏳ To be determined/purchased
+- **Size:** ESP32-C3 Super Mini form factor
 
 **Acceptance Criteria:**
 - Meets all specified technical requirements
 - Reliable WiFi connectivity within 50m of access point
-- Stable audio sampling and processing
+- Stable audio sampling and processing (I2S to be verified on ESP32-C3)
 - Operating temperature: 0°C to +50°C (typical)
+- **Hardware Verification Required:** I2S peripheral and GPIO pin assignments must be verified once ESP32-C3 boards are received
 
 #### H2: Central Web Server
 **Priority:** P0 (Critical)
