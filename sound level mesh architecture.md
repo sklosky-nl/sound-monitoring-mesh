@@ -164,10 +164,30 @@ The system consists of three main components:
    - Buffer management for audio data (double buffering recommended)
    - Interrupt-driven I2S DMA for real-time processing
    - Data format conversion: 24-bit I2S data to 16-bit or 32-bit float for processing
+   - **Anti-Aliasing:**
+     - Digital anti-aliasing low-pass filter applied before FFT
+     - Cutoff frequency: Nyquist frequency (sample_rate / 2)
+     - Filter type: Butterworth or Chebyshev (4th-8th order recommended)
+     - Prevents aliasing artifacts in frequency domain
+     - Implemented using ESP-DSP library or custom filter
 
 2. **Audio Processing Module**
-   - FFT (Fast Fourier Transform) for frequency analysis
-   - dB calculation from audio samples
+   - **FFT (Fast Fourier Transform) for frequency analysis:**
+     - FFT size: 256-1024 points (configurable, power of 2)
+     - **Windowing Function:**
+       - Apply window function to reduce spectral leakage
+       - Window types: Hamming, Hanning, or Blackman (recommended: Hamming)
+       - Window applied to time-domain samples before FFT
+       - Compensates for window gain in frequency domain calculations
+     - **Overlap Processing (Optional):**
+       - Overlap-add or overlap-save technique for continuous analysis
+       - 50% overlap recommended for smooth frequency response
+       - Reduces edge effects from windowing
+   - **Frequency Domain Processing:**
+     - Magnitude calculation from FFT output
+     - Power spectral density (PSD) computation
+     - Frequency bin to Hz conversion: `frequency = (bin_index × sample_rate) / FFT_size`
+   - dB calculation from frequency domain data
    - Frequency band filtering and level calculation
    - **Calibration Application:**
      - Apply calibration offset to overall dB measurement
@@ -1112,10 +1132,18 @@ sudo ufw status
   - HTTP: ESP-IDF HTTP client (esp_http_client)
   - JSON: cJSON library
   - FFT: ESP-DSP library (esp-dsp)
+  - **Signal Processing:**
+    - ESP-DSP library for FFT and digital filters
+    - Anti-aliasing filter implementation (Butterworth/Chebyshev)
+    - Windowing functions (Hamming, Hanning, Blackman)
   - Audio: ESP-IDF I2S driver (driver/i2s.h) for INMP441 microphone module
   - NVS: Non-volatile storage for configuration (nvs_flash)
   - NTP: Network time protocol (lwip)
 - **I2S Configuration:** 16-48 kHz sample rate, 24-bit depth, mono channel
+- **Signal Processing:**
+  - Anti-aliasing: Digital low-pass filter (4th-8th order)
+  - Windowing: Hamming window (or configurable window type)
+  - FFT: 256-1024 point FFT with window gain compensation
 - **Development:** MacBook with Cursor IDE, ESP-IDF installed locally
 
 ### 9.5 DevOps & Deployment
@@ -1452,14 +1480,32 @@ Response: 200 OK
 ### 12.1 Data Processing
 
 - **I2S Configuration:** Configure I2S for INMP441 (16-48 kHz, 24-bit, mono)
-- **FFT Processing:** Optimize FFT size for ESP32 capabilities (256-1024 point FFT)
+- **Anti-Aliasing Filter:**
+  - Implement digital low-pass filter before FFT processing
+  - Cutoff at Nyquist frequency (sample_rate / 2)
+  - Use ESP-DSP library filters or optimized FIR filter
+  - Filter order: 4th-8th order for adequate stopband attenuation
+  - Prevents aliasing artifacts in frequency domain
+- **FFT Processing:**
+  - Optimize FFT size for ESP32-C3 capabilities (256-1024 point FFT)
+  - Apply windowing function (Hamming recommended) to reduce spectral leakage
+  - Window gain compensation in frequency domain calculations
+  - Consider overlap processing (50% overlap) for continuous analysis
+- **Windowing Techniques:**
+  - **Hamming Window:** Good balance of main lobe width and side lobe suppression
+  - **Hanning Window:** Slightly better side lobe suppression
+  - **Blackman Window:** Best side lobe suppression, wider main lobe
+  - Window function applied to time-domain samples before FFT
+  - Compensate for window gain: `magnitude_corrected = magnitude_raw / window_gain`
 - **Sampling Rate:** Balance between frequency resolution and processing load (recommended 16 kHz for INMP441)
+- **Frequency Resolution:** `frequency_resolution = sample_rate / FFT_size`
+  - For 16 kHz sample rate, 1024-point FFT: ~15.6 Hz resolution
 - **Calibration Processing:**
   - Apply calibration offsets efficiently (simple addition operation)
   - Store both raw and calibrated values for comparison
   - Cache calibration values in memory to avoid repeated lookups
 - **Data Batching:** Batch multiple measurements if network is slow
-- **I2S DMA:** Use DMA for efficient data transfer from INMP441 to ESP32 memory
+- **I2S DMA:** Use DMA for efficient data transfer from INMP441 to ESP32-C3 memory
 
 ### 12.2 File Storage Optimization
 

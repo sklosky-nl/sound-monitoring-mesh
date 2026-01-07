@@ -125,6 +125,17 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 - Real-time continuous monitoring
 - Configurable measurement intervals (minimum 1 second)
 - Measurement accuracy: ±2 dB (before calibration)
+- **Signal Processing Requirements:**
+  - **Anti-Aliasing:** Digital low-pass filter applied before FFT to prevent aliasing
+    - Cutoff frequency: Nyquist frequency (sample_rate / 2)
+    - Filter implementation: 4th-8th order digital filter
+  - **Windowing:** Window function applied to reduce spectral leakage
+    - Window type: Hamming, Hanning, or Blackman (Hamming recommended)
+    - Window gain compensation in frequency calculations
+    - Prevents sampling window effects and spectral leakage
+  - **FFT Processing:** Fast Fourier Transform for frequency domain analysis
+    - FFT size: 256-1024 points (power of 2)
+    - Overlap processing: Optional 50% overlap for continuous analysis
 - **Calibration Support:**
   - Calibrated measurements with dB offset application
   - Per-device calibration offsets
@@ -133,6 +144,8 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 **Acceptance Criteria:**
 - Accurate dB measurements within ±2 dB of calibrated reference (after calibration)
 - Frequency band measurements match configured ranges
+- Anti-aliasing filter prevents aliasing artifacts in frequency domain
+- Windowing function effectively reduces spectral leakage
 - Continuous monitoring with < 5% data loss
 - All measurement parameters configurable via admin interface
 - Support for multiple frequency band configurations per device
@@ -329,6 +342,8 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
   - Real-time audio sampling via I2S interface (to be verified on ESP32-C3)
   - Sampling rate: 16 kHz (INMP441 supports up to 48 kHz)
   - 24-bit audio data processing
+  - **Anti-Aliasing:** Digital low-pass filter to prevent aliasing artifacts
+  - **Windowing:** Window function (Hamming/Hanning) to reduce spectral leakage and sampling window effects
 - **Enclosure:** Weather-resistant (IP54 minimum recommended)
   - **Status:** ⏳ To be determined/purchased
 - **Size:** ESP32-C3 Super Mini form factor
@@ -581,6 +596,8 @@ The following features are explicitly out of scope for the initial release:
 1. **Sampling Rate:** What audio sampling rate provides optimal balance between frequency resolution and processing requirements? (INMP441 supports up to 48 kHz)
 2. **I2S Configuration:** Optimal I2S bus configuration (sample rate, bit depth, channel configuration) for INMP441 module
 3. **Frequency Band Defaults:** What are the default frequency bands to configure initially (e.g., octave bands, third-octave bands)?
+4. **Anti-Aliasing Filter:** Optimal filter order and type (Butterworth vs Chebyshev) for anti-aliasing
+5. **Windowing Function:** Which window function provides best balance (Hamming, Hanning, or Blackman) for this application?
 4. **File Format Selection:** CSV files vs JSON files for sensor measurement data storage?
 5. **Web Framework:** Which backend framework (Node.js, Python Flask/Django, Go) best suits the requirements?
 6. **Deployment Model:** Cloud-hosted (AWS, Azure, GCP) or on-premise server deployment?
@@ -595,6 +612,10 @@ The following features are explicitly out of scope for the initial release:
 - **Frequency Band:** A range of frequencies (start frequency to end frequency) for sound level measurement
 - **dB (Decibel):** Logarithmic unit for sound level measurement
 - **FFT (Fast Fourier Transform):** Algorithm for frequency domain analysis of audio signals
+- **Anti-Aliasing Filter:** Digital low-pass filter applied before FFT to prevent frequency aliasing artifacts
+- **Windowing Function:** Mathematical function (Hamming, Hanning, Blackman) applied to time-domain samples to reduce spectral leakage and sampling window effects
+- **Spectral Leakage:** Unwanted frequency spreading in FFT output caused by finite sampling window
+- **Nyquist Frequency:** Maximum frequency that can be accurately represented, equal to half the sampling rate
 - **I2S:** Inter-IC Sound, a serial bus interface standard for connecting digital audio devices
 - **INMP441:** I2S digital MEMS microphone module with omnidirectional pickup pattern
 - **PDM (Pulse Density Modulation):** Modulation format used by INMP441, converted to I2S format
