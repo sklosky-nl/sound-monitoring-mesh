@@ -497,12 +497,22 @@ ESP32 Device                    Central Server
      │  1. Audio Sampling            │
      │     (Continuous)               │
      │                               │
-     │  2. FFT Processing            │
+     │  2. Anti-Aliasing Filter      │
+     │     - Apply low-pass filter   │
+     │     - Cutoff at Nyquist freq  │
+     │                               │
+     │  3. Apply Windowing Function  │
+     │     - Hamming/Hanning window  │
+     │     - Reduce spectral leakage │
+     │                               │
+     │  4. FFT Processing            │
+     │     - Calculate frequency     │
+     │       domain representation   │
      │     - Calculate dB             │
      │     - Calculate frequency      │
      │       band levels              │
      │                               │
-     │  3. Apply Calibration         │
+     │  5. Apply Calibration         │
      │     - Apply dB offset         │
      │     - Apply per-band offsets  │
      │     - Store raw values        │
@@ -753,6 +763,8 @@ firmware/
 │   ├── audio/
 │   │   ├── i2s_driver.c            # I2S interface driver for INMP441
 │   │   ├── audio_sampler.c         # Audio sampling via I2S
+│   │   ├── anti_alias_filter.c     # Anti-aliasing low-pass filter
+│   │   ├── window_function.c       # Windowing functions (Hamming, Hanning, etc.)
 │   │   ├── audio_processor.c       # FFT and dB calculation
 │   │   ├── frequency_bands.c       # Frequency band processing
 │   │   └── calibration.c          # Calibration offset application
@@ -1564,7 +1576,11 @@ Response: 200 OK
 ### A. Glossary
 
 - **ESP32:** Low-cost microcontroller with integrated WiFi
-- **FFT:** Fast Fourier Transform for frequency domain analysis
+- **FFT:** Fast Fourier Transform for frequency domain analysis of audio signals
+- **Anti-Aliasing Filter:** Digital low-pass filter applied before FFT to prevent frequency aliasing
+- **Windowing Function:** Mathematical function applied to time-domain samples to reduce spectral leakage (e.g., Hamming, Hanning, Blackman windows)
+- **Spectral Leakage:** Unwanted frequency spreading in FFT output caused by finite sampling window, mitigated by windowing functions
+- **Nyquist Frequency:** Maximum frequency that can be accurately represented (sample_rate / 2)
 - **File Locking:** Mechanism to prevent concurrent write conflicts
 - **I2S:** Inter-IC Sound interface for digital audio
 - **INMP441:** MH-ET LIVE INMP441 I2S Digital Microphone Module - omnidirectional MEMS microphone
