@@ -1,11 +1,35 @@
 # Sound Level Mesh System - Architecture Document
 
 ## Document Information
-- **Version:** 1.0
-- **Date:** 2024
-- **Status:** Draft
+- **Version:** 1.2
+- **Date:** 2024 (Updated: February 1, 2026)
+- **Status:** Active - Production Implementation
 - **Author:** Engineering Team
 - **Related Documents:** Sound Level Mesh System PRD
+- **Latest Updates:** Dynamic frequency band configuration, enhanced visualization, analytics dashboard
+
+---
+
+## Important Note: PCB Design Approach
+
+**Date:** January 30, 2026
+
+**Lesson Learned:** Initial attempts to automate KiCad PCB generation through Python scripting proved overly complex and ultimately unsuccessful. While the KiCad Python API (pcbnew) exists, the complexity of automated PCB generation, combined with the limitations of AI assistance in this specialized domain, made this approach impractical.
+
+**Decision:** For this project, we will use **breadboard or protoboard** assembly for the ESP32-C3 and INMP441 microphone modules. This approach is:
+- Faster to implement and test
+- More flexible for prototyping and debugging
+- Appropriate for a 10-device deployment
+- Easier to modify during development
+- Well-documented in the Component Pinout Reference
+
+**Recommendation:** For future projects requiring custom PCBs, consider:
+- Manual PCB design using KiCad GUI (not automated)
+- Working with professional PCB design services
+- Using off-the-shelf breakout boards and protoboard
+- Only investing in custom PCB design for production-scale deployments (100+ units)
+
+The [Component Pinout Reference](COMPONENT_PINOUT_REFERENCE.md) document contains all necessary wiring information for breadboard/protoboard assembly.
 
 ---
 
@@ -107,15 +131,15 @@ The system consists of three main components:
     - Bit depth: 24-bit
     - Signal-to-Noise Ratio (SNR): 65 dB
     - Sensitivity: -26 dBFS
-  - **Pin Connections (INMP441 to ESP32-C3 - To Be Verified):**
-    - VDD → ESP32-C3 3.3V (verify pin)
+  - **Pin Connections (INMP441 to ESP32-C3 - Verified):**
+    - VDD → ESP32-C3 3.3V
     - GND → ESP32-C3 GND
-    - SCK (Serial Clock) → ESP32-C3 I2S_BCLK (GPIO TBD - verify)
-    - WS (Word Select) → ESP32-C3 I2S_WS (GPIO TBD - verify)
-    - SD (Serial Data) → ESP32-C3 I2S_DATA (GPIO TBD - verify)
+    - SCK (Serial Clock) → ESP32-C3 GPIO 5 (I2S_BCLK)
+    - WS (Word Select) → ESP32-C3 GPIO 6 (I2S_WS)
+    - SD (Serial Data) → ESP32-C3 GPIO 4 (I2S_DATA)
     - L/R (Left/Right select) → ESP32-C3 GND (for mono/left channel)
   - **Connection Type:** Direct I2S digital connection (no analog components required)
-  - **Action Required:** Verify I2S peripheral availability and GPIO pin assignments on ESP32-C3 once hardware is received
+  - **Status:** ✅ Verified and implemented in firmware. I2S peripheral confirmed functional on ESP32-C3.
 
 - **Power Supply**
   - USB power (5V) or external power adapter
@@ -152,24 +176,48 @@ The system consists of three main components:
 
 #### Firmware Modules
 
-1. **Audio Sampling Module**
+1. **HTTP Communication Module**
+   - **Connection Management:**
+     - Timeout: 10 seconds per attempt
+     - Maximum retries: 3 attempts
+     - Retry delay: Exponential backoff (2s, 4s, 8s)
+     - Keep-alive: Disabled (fresh connections per request)
+     - Transport type: HTTP_TRANSPORT_OVER_TCP
+     - Connection header: "Connection: close"
+   - **Error Handling:**
+     - Automatic retry on connection failures
+     - Detailed error logging with symbols (✓/✗)
+     - Handles ESP_ERR_HTTP_CONNECT errors
+     - Recovers from network interruptions
+   - **Data Submission:**
+     - POST to /api/data/measurements endpoint
+     - JSON payload with device_id, timestamp, dB levels, frequency bands
+     - Bearer token authentication
+     - Content-Type: application/json
+   - **Network Considerations:**
+     - Works on standard WiFi networks (WPA2/WPA3)
+     - Compatible with DHCP IP assignment
+     - May experience issues with VPN software on server machine
+     - Requires both devices on same network or proper routing
+
+2. **Audio Sampling Module**
    - **I2S Interface Configuration for INMP441:**
-     - Sample rate: 16 kHz (configurable, INMP441 supports up to 48 kHz)
-     - Bit depth: 24-bit
+     - Sample rate: 16 kHz (INMP441 supports up to 48 kHz)
+     - Bit depth: 32-bit containers (24-bit data left-aligned)
      - Channel format: Mono (left channel)
-     - Communication format: I2S (standard)
-     - DMA buffer size: 1024 bytes (configurable)
+     - Communication format: I2S MSB standard mode
+     - DMA buffer size: 1024 samples
+     - DMA buffer count: 4
+     - GPIO Pins: BCLK=GPIO5, WS=GPIO6, DATA=GPIO4
    - Continuous audio sampling via I2S DMA
-   - 24-bit audio data reception from INMP441
-   - Buffer management for audio data (double buffering recommended)
+   - 24-bit audio data reception from INMP441 in 32-bit containers
+   - Buffer management for audio data (1024 samples per read)
    - Interrupt-driven I2S DMA for real-time processing
-   - Data format conversion: 24-bit I2S data to 16-bit or 32-bit float for processing
-   - **Anti-Aliasing:**
-     - Digital anti-aliasing low-pass filter applied before FFT
-     - Cutoff frequency: Nyquist frequency (sample_rate / 2)
-     - Filter type: Butterworth or Chebyshev (4th-8th order recommended)
-     - Prevents aliasing artifacts in frequency domain
-     - Implemented using ESP-DSP library or custom filter
+   - Data format conversion: 24-bit I2S data (right-shifted by 8) to float normalized -1.0 to 1.0
+   - **Windowing:**
+     - Hamming window applied before FFT
+     - Reduces spectral leakage
+     - Implemented in firmware
 
 2. **Audio Processing Module**
    - **FFT (Fast Fourier Transform) for frequency analysis:**
@@ -543,34 +591,58 @@ ESP32 Device                    Central Server
      │                               │
 ```
 
-### 4.2 Configuration Flow
+### 4.2 Dynamic Configuration Flow (Updated February 2026)
 
 ```
 Admin User                    Web Server                    ESP32 Device
      │                            │                              │
      │  1. Configure Frequency    │                              │
-     │     Bands via Admin UI     │                              │
+     │     Bands via Dashboard    │                              │
+     │     (Click ⚙️ on device)   │                              │
      │                            │                              │
      │  2. Save Configuration     │                              │
      │  ────────────────────────> │                              │
+     │  PUT /api/config/devices/:id/frequency-bands               │
      │                            │                              │
-     │                            │  3. Store in File System    │
+     │                            │  3. Store in Device JSON     │
+     │                            │     (data/devices/{id}.json)  │
      │                            │                              │
-     │                            │  4. Device Polls Config      │
+     │                            │                              │
+     │                            │  4. Device Startup:          │
+     │                            │     Fetch Configuration      │
      │                            │  <───────────────────────────│
-     │                            │  GET /api/config/devices/:id │
+     │                            │  GET /api/config/devices/     │
+     │                            │      Sensor%2001/frequency-bands│
      │                            │                              │
      │                            │  5. Return Configuration     │
      │                            │  ───────────────────────────>│
+     │                            │  {frequency_bands: [...],    │
+     │                            │   calibration_offset_db: 1}  │
      │                            │                              │
-     │                            │                              │  6. Update Local Config
-     │                            │                              │     - Frequency bands
-     │                            │                              │     - Measurement interval
+     │                            │                              │  6. Apply Configuration
+     │                            │                              │     - Update frequency bands
+     │                            │                              │     - Update calibration
+     │                            │                              │     - Log changes
      │                            │                              │
-     │  7. View Updated Config    │                              │
+     │                            │  7. Periodic Refresh         │
+     │                            │     (Every 100 measurements  │
+     │                            │      ~5 minutes)             │
+     │                            │  <───────────────────────────│
+     │                            │  GET /api/config/devices/...  │
+     │                            │                              │
+     │  8. View Live Data with    │                              │
+     │     Updated Configuration  │                              │
      │  <──────────────────────── │                              │
      │                            │                              │
 ```
+
+**Key Features:**
+- **Startup Configuration Fetch:** Device fetches configuration immediately after WiFi connection
+- **Periodic Refresh:** Configuration automatically re-fetched every ~5 minutes (100 measurements)
+- **Per-Sensor Settings:** Each sensor stores and applies its own unique configuration
+- **Runtime Updates:** No firmware reflash needed for frequency band changes
+- **URL Encoding:** Device ID automatically URL-encoded in firmware to handle spaces
+- **Calibration Sync:** Both frequency bands and calibration offsets fetched together
 
 ### 4.3 Real-Time Monitoring Flow
 
@@ -714,8 +786,61 @@ backend/
 
 ### 6.2 Frontend Application Structure
 
+**Implementation Status:** ✅ Production Ready (February 2026)
+
+The current frontend implementation uses vanilla JavaScript with Chart.js for visualization, deployed via Python's http.server for development.
+
+**Production Structure:**
 ```
 frontend/
+├── index.html                       # Main application page
+├── test.html                        # Testing page
+├── css/
+│   ├── styles.css                   # Main styles with color-coded thresholds
+│   └── features.css                 # Feature-specific styles
+└── js/
+    ├── app.js                       # Main application logic, device management
+    ├── api.js                       # Backend API client
+    └── charts.js                    # Chart.js visualization wrapper
+```
+
+**Key Features Implemented (v1.2):**
+
+1. **Color-Coded Sound Level Display**
+   - Under 80 dB: Green (#d1fae5 background, #065f46 text)
+   - 80-95 dB: Yellow (#fef3c7 background, #92400e text)
+   - Over 95 dB: Red (#fecaca background, #991b1b text)
+   - Applied to: Dashboard cards, history items, measurement badges
+
+2. **Multi-Line History Chart**
+   - Chart.js v4.4.0 with multi-dataset support
+   - Overall sound level (primary line)
+   - Individual frequency band levels (3 additional lines)
+   - Color scheme: Green, Orange, Pink, Purple, Yellow
+   - Automatic dataset creation based on frequency_bands array
+   - Time-series visualization with ISO timestamp parsing
+
+3. **Full-Width History Display**
+   - Flexbox layout for measurement items
+   - Full screen width utilization (changed from grid layout)
+   - Improved readability for frequency band data
+   - Responsive design for mobile/desktop
+
+4. **Active Status Monitoring**
+   - 60-second activity threshold
+   - Real-time status indicators (green=active, gray=inactive)
+   - last_seen timestamp display
+   - Auto-refresh every 10 seconds
+
+5. **Analytics Dashboard**
+   - Date range selection for queries
+   - Statistical calculations (min, max, average, median)
+   - Per-frequency band statistics
+   - API endpoint: GET /api/analytics/stats
+
+**Future Migration Path (Optional):**
+```
+frontend/ (React/Vue migration - not yet implemented)
 ├── src/
 │   ├── components/
 │   │   ├── monitoring/
@@ -790,50 +915,171 @@ firmware/
 
 ### 7.1 Authentication & Authorization
 
-1. **User Authentication (Web Interface)**
-   - Username/password authentication
-   - Session management (JWT tokens or session cookies)
-   - Role-based access (admin vs viewer)
+**Current Implementation Status (February 2026):**
+- **⏳ Not Yet Implemented:** User authentication deferred for MVP
+- System currently operates in development mode without authentication
+- Future implementation would include:
+  - Username/password authentication
+  - Session management (JWT tokens or session cookies)
+  - Role-based access (admin vs viewer)
 
-2. **Device Authentication**
-   - Device registration with unique device ID
-   - API key or token-based authentication
-   - MAC address validation
+**Device Authentication:**
+- Device registration with unique device ID
+- Device IDs support alphanumeric names with spaces (URL encoded)
+- MAC address tracking for device identification
+- Configuration access controlled by device_id parameter
 
 ### 7.2 Data Security
 
 1. **Transport Security**
    - HTTP for all communication (unencrypted, no certificates)
-   - WiFi network (WPA2/WPA3 for WiFi authentication, but application traffic unencrypted)
+   - Local network deployment (WiFi WPA2/WPA3)
+   - Development environment: localhost communication
+   - Production recommendation: HTTPS with Let's Encrypt certificates
 
 2. **Data Storage Security**
-   - File system access (local file storage)
-   - Secure password hashing (bcrypt, Argon2)
-   - Configuration data storage (unencrypted)
+   - File-based storage with filesystem permissions
+   - Device configurations stored per device in JSON format
+   - Measurement data organized by device and date
+   - No sensitive credential storage in current implementation
 
 3. **API Security**
-   - Input validation and sanitization
-   - Rate limiting
-   - CORS configuration
-   - SQL injection prevention (parameterized queries)
+   - Input validation via Express middleware
+   - URL parameter sanitization (device IDs, dates)
+   - CORS enabled for development (localhost:8080 to localhost:3000)
+   - Rate limiting: Not yet implemented (recommended for production)
 
 ### 7.3 Network Security
 
-- Firewall rules on web server
-- Network segmentation (optional)
-- VPN access for remote administration (optional)
+**Current Deployment:**
+- Local network deployment (192.168.68.x subnet)
+- WiFi security: WPA2/WPA3 network encryption
+- Backend server: 192.168.68.57:3000
+- Frontend server: localhost:8080
+
+**Production Recommendations:**
+- Firewall rules on web server (block non-HTTP/HTTPS ports)
+- Network segmentation (IoT devices on separate VLAN)
+- VPN access for remote administration (if internet-accessible)
+
+---
+
+## 7A. Current Deployment Status (February 2026)
+
+### 7A.1 Active Hardware Deployment
+
+**Operational Sensor:**
+- **Device ID:** "Sensor 01"
+- **MAC Address:** 08:92:72:84:1d:18
+- **Status:** ✅ Active and transmitting
+- **Connection:** USB-C wall charger power
+- **Location:** Development environment
+- **Last Seen:** Within 5 seconds (continuous operation)
+- **Measurement Frequency:** Every 5 seconds
+- **Current Readings:** 76-77 dB ambient levels
+
+**Hardware Configuration:**
+- ESP32-C3 Super Mini microcontroller
+- INMP441 I2S digital microphone
+- Pin connections verified: GPIO 4 (data), GPIO 5 (BCLK), GPIO 6 (WS)
+- I2S configuration: 16kHz sample rate, 32-bit containers
+- WiFi: Connected to local network (192.168.68.x)
+
+### 7A.2 Software Deployment
+
+**Backend Server:**
+- Platform: Node.js with Express
+- Host: 192.168.68.57:3000
+- Status: ✅ Running and accepting measurements
+- API Endpoints: All operational
+- Storage: File-based JSON (backend/data/)
+- Log: backend/src/utils/logger.js
+
+**Frontend Application:**
+- Platform: Vanilla JavaScript + Chart.js
+- Host: localhost:8080 (Python http.server)
+- Status: ✅ Operational
+- Features: Dashboard, history chart, analytics, config management
+- Browser: Chrome/Safari compatible
+
+**Firmware:**
+- Framework: ESP-IDF v6.1-dev-2300
+- Language: C
+- Features:
+  - I2S audio sampling (16kHz)
+  - FFT frequency analysis (3 bands: 20-200Hz, 200-2000Hz, 2000-8000Hz)
+  - Dynamic configuration fetch (startup + periodic refresh)
+  - HTTP POST measurements every 5 seconds
+  - URL encoding for device IDs with spaces
+  - Calibration offset application (1.0 dB)
+
+### 7A.3 Data Flow Verification
+
+**Measurement Transmission:**
+```
+ESP32 Device → WiFi Network → Backend API (POST /api/data/measurements)
+              ↓
+         JSON storage (backend/data/measurements/Sensor 01_YYYY-MM-DD.json)
+              ↓
+         Frontend retrieval (GET /api/data/measurements/:deviceId)
+              ↓
+         Dashboard display + Chart visualization
+```
+
+**Configuration Sync:**
+```
+Backend storage (backend/data/devices/Sensor 01.json)
+              ↓
+ESP32 fetch (GET /api/config/devices/Sensor%2001/frequency-bands)
+              ↓
+Apply settings (calibration offset, frequency bands)
+              ↓
+Periodic refresh (every 100 measurements, ~5 minutes)
+```
+
+**Performance Metrics:**
+- Measurement latency: < 1 second (device to server)
+- API response time: < 200ms (typical)
+- Configuration update: < 60 seconds (includes periodic refresh)
+- Data retention: Currently unlimited (no auto-purge implemented)
+- Active status threshold: 60 seconds
 
 ---
 
 ## 8. Deployment Architecture
 
-### 8.1 Deployment Platform
+### 8.1 Deployment Environments
+
+This system supports multiple deployment configurations depending on the development phase and scale of deployment.
+
+#### 8.1.1 Development Environment #1 (Current - January 2026)
+
+**Local Development and Testing**
+
+See Section 9.6.1 for detailed configuration.
+
+**Platform:**
+- **Server:** MacBook running local development servers
+- **Network:** Home WiFi network
+- **ESP32:** Single device connected via USB and WiFi
+- **Purpose:** Initial development, firmware testing, system prototyping
+
+**Quick Summary:**
+- All components (backend, frontend, ESP32) run on or connect to MacBook
+- ESP32-C3 connected via USB for flashing, WiFi for runtime communication
+- INMP441 microphone wired per design specifications (GPIO 4, 5, 6)
+- Ideal for rapid development and testing
+
+#### 8.1.2 Production Environment (Future)
+
+**Remote Server Deployment**
 
 **Target Platform:**
 - **Operating System:** Ubuntu 20.04 LTS
 - **Web Server:** Nginx (already installed and running)
 - **Deployment Type:** On-premise or cloud server
 - **Network:** Local network or public IP with WiFi access
+- **ESP32 Devices:** Up to 10 units deployed at various locations
 
 **Server Environment:**
 - Ubuntu 20.04.4 LTS server
@@ -1170,50 +1416,166 @@ sudo ufw status
 - **Logging:** Application logs to /var/www/sound-monitoring/data/logs/
 - **Backup:** File system backups using rsync or tar
 
-### 9.6 Development Environment
+### 9.6 Development Environments
 
-**Development Platform:**
-- **Development Machine:** MacBook with Cursor IDE
-- **Target Server:** Ubuntu 20.04 LTS server
+#### 9.6.1 Development Environment #1 (Current - January 2026)
+
+**Local Development and Testing Environment**
+
+This is the **first development environment** being used for initial firmware development and system testing.
+
+**Hardware Configuration:**
+- **Development Machine:** MacBook with VS Code/Cursor IDE
+- **Web Server:** Running locally on MacBook (Node.js/Python development server)
+- **ESP32 Device:** ESP32-C3 SuperMini connected via USB to MacBook
+- **Microphone:** INMP441 I2S microphone connected to ESP32-C3 per design specs:
+  - VDD → ESP32-C3 3.3V
+  - GND → ESP32-C3 GND
+  - SCK → GPIO 5 (I2S_BCLK)
+  - WS → GPIO 6 (I2S_WS)
+  - SD → GPIO 4 (I2S_DATA)
+  - L/R → GND (left channel/mono)
+- **Network:** Home WiFi network connecting ESP32 to MacBook
+
+**Network Topology:**
+```
+┌─────────────────────────────────────────┐
+│         Home WiFi Network               │
+│         (2.4 GHz 802.11n)              │
+└────────────┬────────────────┬───────────┘
+             │                │
+    ┌────────▼────────┐  ┌────▼──────────────┐
+    │   MacBook       │  │  ESP32-C3         │
+    │  (Dev Server)   │  │  SuperMini        │
+    │                 │  │                   │
+    │  Backend API:   │  │  Connected via:   │
+    │  Port 3000      │  │  - USB (flashing) │
+    │                 │  │  - WiFi (runtime) │
+    │  Frontend UI:   │  │                   │
+    │  Port 8080      │  │  Connects to:     │
+    │                 │  │  MacBook IP:3000  │
+    │  Browser:       │  │  (Backend API)    │
+    │  localhost:8080 │  │                   │
+    └─────────────────┘  │  INMP441 Mic      │
+                         │  (I2S wired)      │
+                         └───────────────────┘
+```
+
+**Network Configuration:**
+- **MacBook Local IP:** Obtain via `ipconfig getifaddr en0` (typically 192.168.x.x)
+  - Current IP (Jan 30, 2026): 192.168.68.67
+- **Backend API Endpoint (from ESP32):** `http://<MacBook-IP>:<API_PORT>/api/`
+  - Example (default): `http://192.168.68.67:3000/api/`
+  - Port should be configurable via environment variable
+- **Frontend Access (browser):** `http://localhost:<FRONTEND_PORT>`
+  - Example (default): `http://localhost:8080`
+  - Port should be configurable via environment variable
+- **ESP32 WiFi Configuration:**
+  - SSID: Home WiFi network name
+  - Password: Home WiFi password
+  - Server URL: `http://<MacBook-IP>:<API_PORT>`
+  - Example (default): `http://192.168.68.67:3000`
+  - ESP32 firmware should read server URL from configuration
+
+**Development Workflow:**
+1. **Firmware Development:**
+   - Edit ESP32 firmware code in VS Code on MacBook
+   - Build firmware using ESP-IDF: `. ~/esp/esp-idf/export.sh && idf.py build`
+   - Flash to ESP32 via USB: `idf.py -p /dev/tty.usbserial-* flash`
+   - Monitor serial output: `idf.py monitor`
+
+2. **Backend Development:**
+   - Run backend API server locally on MacBook (Node.js/Python)
+   - Backend listens on **http://localhost:3000** (API endpoints, default port)
+   - **Port should be configurable** via `PORT` or `API_PORT` environment variable
+   - ESP32 connects to backend via home WiFi network using MacBook's local IP
+
+3. **Frontend Development:**
+   - Run frontend development server on MacBook
+   - Frontend listens on **http://localhost:8080** (web interface, default port)
+   - **Port should be configurable** via `PORT` or `FRONTEND_PORT` environment variable
+   - Access web interface via browser on MacBook at http://localhost:8080
+
+4. **Testing:**
+   - ESP32 samples audio from INMP441 microphone
+   - ESP32 sends data to backend running on MacBook via WiFi
+   - Monitor and visualize data in web browser on MacBook
+   - Debug and iterate on firmware and backend code
+
+**Installed Development Tools:**
+- ESP-IDF v6.1-dev-2300-g17a74c925c
+- Python 3.12.8
+- Node.js v23.11.0
+- npm 10.9.2
+- cmake 4.2.3
+- ninja 1.13.2
+- dfu-util 0.11
+- Git 2.50.1
+- Homebrew 5.0.12
+
+**Port Allocation:**
+- **Port 3000** - Backend API server (available, default)
+- **Port 8080** - Frontend development server (available, default)
+- **Port 5000** - IN USE by macOS ControlCenter (AirPlay) - DO NOT USE
+- **Port 7000** - IN USE by macOS ControlCenter - DO NOT USE
+
+**Note:** Backend API and Frontend UI ports should be **configurable via environment variables** (e.g., `PORT`, `API_PORT`, `FRONTEND_PORT`) to avoid conflicts with other services.
+
+**Benefits of This Environment:**
+- Fast iteration cycle (all components on one machine)
+- Easy debugging with direct USB serial access
+- No network latency or remote server dependencies
+- Ideal for initial development and testing
+- Simple setup for hardware testing
+
+#### 9.6.2 Production Environment (Future)
+
+**Remote Server Deployment**
+
+This environment will be used for production deployment with multiple ESP32 devices.
+
+**Hardware Configuration:**
+- **Development Machine:** MacBook with VS Code/Cursor IDE
+- **Target Server:** Ubuntu 20.04 LTS server (remote)
 - **Remote Access:** SSH for server development and deployment
-- **Local Development:** MacBook for code editing and ESP32 firmware development
+- **ESP32 Devices:** 10 units deployed at various locations
 
 **Development Workflow:**
 1. **Code Development:**
-   - Edit code on MacBook using Cursor IDE
+   - Edit code on MacBook using VS Code/Cursor IDE
    - Source code stored locally on MacBook
    - Version control (Git) for code management
 
-2. **Server Development:**
+2. **Server Deployment:**
    - SSH into Ubuntu server for server-side development
    - Deploy backend and frontend to server
    - Test and debug on server environment
 
-3. **ESP32 Firmware Development:**
-   - Develop firmware code on MacBook using Cursor IDE
+3. **ESP32 Firmware:**
+   - Develop firmware code on MacBook using VS Code/Cursor IDE
    - Build firmware using ESP-IDF on MacBook
    - Flash ESP32 devices via USB from MacBook
-   - Test devices locally before deployment
+   - Deploy devices to remote locations
 
 **Remote Server Access:**
 - **SSH Connection:** `ssh user@server-ip`
 - **File Transfer:** SCP or SFTP for transferring files
-- **Remote Development:** Use Cursor's remote SSH extension or terminal
+- **Remote Development:** Use VS Code remote SSH extension or terminal
 - **Port Forwarding:** May be needed for testing (if server behind firewall)
 
 **Development Tools on MacBook:**
-- **IDE:** Cursor (for code editing)
+- **IDE:** VS Code/Cursor (for code editing)
 - **ESP32 Development:**
   - ESP-IDF framework
   - esptool.py for flashing
-  - USB drivers for ESP32 (CP2102 or CH340 drivers)
+  - USB drivers for ESP32 (built into modern macOS)
 - **Version Control:** Git
 - **Terminal:** macOS Terminal or iTerm2
 - **SSH Client:** Built-in SSH or Terminal
 
 **Server Development Tools:**
 - **Remote Access:** SSH
-- **File Editing:** nano, vim, or remote editing via Cursor
+- **File Editing:** nano, vim, or remote editing via VS Code
 - **Process Management:** systemd, PM2
 - **Log Monitoring:** journalctl, tail -f
 

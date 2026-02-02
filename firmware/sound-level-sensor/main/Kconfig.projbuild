@@ -1,0 +1,29 @@
+# Sound Level Sensor - ESP32-C3 Firmware Configuration
+
+menu "Sound Level Sensor Configuration"
+
+    config WIFI_SSID
+        string "WiFi SSID"
+        default "YourWiFiSSID"
+        help
+            SSID (network name) for the sensor to connect to.
+
+    config WIFI_PASSWORD
+        string "WiFi Password"
+        default "YourWiFiPassword"
+        help
+            WiFi password (WPA2 or WPA3) for the network.
+
+    config SERVER_URL
+        string "Backend Server URL"
+        default "http://192.168.1.100:3000"
+        help
+            URL of the backend API server (e.g., http://192.168.1.100:3000)
+
+    config API_KEY
+        string "API Key"
+        default "your_api_key_here"
+        help
+            API key for authenticating with the backend server
+
+endmenu

@@ -22,6 +22,9 @@ dist/
 firmware/build/
 firmware/sdkconfig.old
 firmware/.espressif/
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old
+!firmware/**/sdkconfig.defaults
 
 # Node.js
 node_modules/
@@ -53,11 +56,20 @@ logs/
 
 # Data files (if containing sensitive info)
 data/measurements/
+data/devices/*.json
+data/alerts/*.json
 data/config/users.json
+backend/data/measurements/
+backend/data/devices/
+backend/data/alerts/
+backend/data/logs/
 
 # Temporary files
 *.tmp
-*.temp
+*.
+
+# Screen logs and other runtime files
+screenlog.*temp
 .cache/
 
 # Backup files

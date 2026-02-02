@@ -1,0 +1,9 @@
+node_modules/
+.env.local
+.env.*.local
+*.log
+data/measurements/*.json
+data/measurements/*.csv
+.DS_Store
+*.swp
+*.swo

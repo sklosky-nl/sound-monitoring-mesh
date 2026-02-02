@@ -1,0 +1,19 @@
+# Example SDK Configuration
+# Copy this file to 'sdkconfig' and update with your actual values
+
+# WiFi Configuration
+CONFIG_WIFI_SSID="YourWiFiSSID"
+CONFIG_WIFI_PASSWORD="YourWiFiPassword"
+
+# Backend Server Configuration
+CONFIG_SERVER_URL="http://192.168.1.100:3000"
+
+# API Key
+CONFIG_API_KEY="your_api_key_here"
+
+# Note: This is a minimal example. The actual sdkconfig file contains many more
+# ESP-IDF configuration options. To generate a complete sdkconfig:
+# 1. Copy this file to sdkconfig
+# 2. Run: idf.py menuconfig
+# 3. Navigate to "Sound Level Sensor Configuration" to set your values
+# 4. Save and exit

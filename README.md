@@ -6,28 +6,85 @@ A distributed sound monitoring system consisting of 10 ESP32-C3-based WiFi senso
 
 ## 📋 Project Status
 
-**Current Phase: Design and Planning**
+**Current Phase: ✅ BUILD COMPLETE - Testing in Progress**
 
-This project is currently in the **design and planning phase**. All system requirements, architecture, and hardware specifications have been documented, but **no code has been generated yet**.
+**All System Code Built (January 30, 2026):**
+
+### ✅ Development Environment #1
+- ✅ MacBook Development Setup Complete
+  - VS Code with Cursor IDE
+  - ESP-IDF v6.1-dev-2300 installed and configured
+  - Node.js v23.11.0, Python 3.12.8
+  - All build tools installed (cmake, ninja, dfu-util)
+- ✅ Hardware Setup Complete
+  - ESP32-C3 SuperMini connected via USB to MacBook (/dev/cu.usbmodem2101)
+  - INMP441 microphone wired to ESP32-C3 (GPIO 4, 5, 6 for I2S)
+  - Home WiFi network for ESP32 ↔ MacBook communication
+  - Verified working: I2S audio sampling (56-70 dB range observed)
+- ✅ Network Configuration
+  - WiFi SSID: YOUR_WIFI_SSID (WPA2)
+  - MacBook IP: 192.168.68.57 (en0 interface)
+  - Backend: http://192.168.68.57:3000
+  - Frontend: http://localhost:8080
+  - Device MAC: 08:92:72:84:1d:18
+
+### ✅ Software Components Built
+- ✅ **ESP32-C3 Firmware** - Complete and tested
+  - I2S audio sampling (16kHz, 32-bit), FFT analysis (1024 points), frequency bands
+  - WiFi connectivity with automatic reconnection
+  - HTTP client with retry logic (3 attempts, exponential backoff)
+  - NTP time sync, robust error handling
+  - Successfully reading microphone (56-70 dB range)
+  - Full source code in `firmware/sound-level-sensor/`
+- ✅ **Backend API Server** - Complete and running
+  - Node.js/Express RESTful API with 10MB body parser
+  - Device management, measurement storage (file-based JSON)
+  - 30-second request/response timeouts for IoT devices
+  - Full source code in `backend/`
+- ✅ **Frontend Dashboard** - Complete and running
+  - Responsive web interface
+  - Real-time monitoring, device management
+  - Full source code in `frontend/`
+
+**📖 See [BUILD_COMPLETE.md](BUILD_COMPLETE.md) for full build summary**  
+**🚀 See [QUICKSTART.md](QUICKSTART.md) for setup instructions**
 
 ### What's Complete
 - ✅ Product Requirements Document (PRD)
 - ✅ System Architecture Document
 - ✅ Hardware Design Document
 - ✅ Technical specifications and design decisions
-- ✅ **Hardware Purchased** (awaiting delivery - January 2026)
-  - 10 × ESP32-C3 Super Mini Development Boards
-  - 10 × MH-ET LIVE INMP441 I2S Microphone Modules
-  - 10 × USB Wall Charger Adapters
-  - 12 × USB-C Charging Cables
+- ✅ **Component Pinout Reference** - Verified ESP32-C3 and INMP441 pinouts
+- ✅ **Hardware Delivered and Connected**
+  - ESP32-C3 SuperMini (USB connected to MacBook)
+  - INMP441 I2S Microphone (wired to ESP32-C3)
+  - USB-C cable and power
+- ✅ **Development Environment #1 Configured**
+  - MacBook with all development tools installed
+  - ESP-IDF framework ready
+  - Home WiFi network setup
+- ✅ **ESP32-C3 Firmware Built** - Complete, ready to flash
+  - 500+ lines of C code
+  - I2S, FFT, WiFi, HTTP client
+  - See `firmware/sound-level-sensor/`
+- ✅ **Backend API Server Built** - Complete, ready to run
+  - Node.js/Express with file-based storage
+  - Full REST API implementation
+  - See `backend/`
+- ✅ **Frontend Dashboard Built** - Complete, ready to serve
+  - Responsive web interface
+  - Real-time monitoring and management
+  - See `frontend/`
 
-### What's Next
-- ⏳ Hardware delivery and verification (ESP32-C3 I2S pin verification)
-- ⏳ ESP32-C3 firmware development (ESP-IDF)
-- ⏳ Backend API server development
-- ⏳ Frontend web application development
-- ⏳ Hardware assembly and testing
-- ⏳ System integration and deployment
+### What's Next - Testing & Deployment
+- ✅ Configure and flash ESP32 firmware
+- ✅ Start backend and frontend servers
+- ✅ Register devices and test hardware (microphone working)
+- ⏳ Complete HTTP communication testing (VPN interference resolved)
+- ⏳ Verify data flow end-to-end
+- ⏳ Calibrate sensors
+- ⏳ System integration testing
+- ⏳ Production deployment (Environment #2 - Remote Ubuntu server)
 
 ## 🎯 Project Overview
 
@@ -70,6 +127,15 @@ Hardware specifications including:
 - Enclosure and environmental considerations
 - Assembly and testing procedures
 
+### [Component Pinout Reference](COMPONENT_PINOUT_REFERENCE.md)
+Complete verified pinout specifications:
+- ESP32-C3 SuperMini complete pinout with physical orientation
+- INMP441 microphone pinout with pin functions
+- Verified I2S wiring configuration (GPIO 4, 5, 6)
+- Software configuration examples
+- Testing and verification procedures
+- Breadboard/protoboard wiring guidance
+
 ## 🛠️ Technology Stack
 
 ### Hardware
@@ -92,9 +158,21 @@ Hardware specifications including:
 - **Storage:** File-based (JSON for config, CSV/JSON for measurements)
 
 ### Development Environment
-- **Development Machine:** MacBook with Cursor IDE
-- **Remote Access:** SSH to Ubuntu 20.04 server
-- **Version Control:** Git with GitHub
+- **Development Machine:** MacBook with VS Code/Cursor IDE
+- **Remote Access:** SSH to Ubuntu 20.04 server (for production deployment)
+- **Local Development:** MacBook for all development and testing
+
+**Current Setup (Environment #1):**
+- MacBook serves as both development machine AND web server
+- ESP32-C3 connected via USB (for flashing) and WiFi (for runtime)
+- INMP441 microphone connected via I2S to ESP32-C3
+- Home WiFi network for ESP32 ↔ MacBook communication
+- All components co-located for rapid development
+
+**Future Setup (Environment #2):**
+- MacBook for development
+- Remote Ubuntu 20.04 server for production deployment
+- 10 ESP32 devices deployed at various locations
 
 ## 📁 Repository Structure
 
@@ -104,12 +182,68 @@ sound-monitoring-mesh/
 ├── sound level mesh system PRD.md      # Product Requirements Document
 ├── sound level mesh architecture.md    # Architecture Document
 ├── sound level mesh hardware design.md # Hardware Design Document
+├── COMPONENT_PINOUT_REFERENCE.md       # Verified component pinouts
 └── .gitignore                          # Git ignore rules
 ```
 
 ## 🚀 Getting Started
 
-### For Developers
+### Current Development Environment (Environment #1)
+
+**You are here!** This is the active development setup as of January 2026.
+
+**Setup Summary:**
+- **MacBook** - Development machine running VS Code, backend server, and frontend
+- **ESP32-C3 SuperMini** - Connected via USB to MacBook, connected to WiFi for runtime
+- **INMP441 Microphone** - Wired to ESP32-C3 using I2S (GPIO 4, 5, 6)
+- **Home WiFi** - Network connecting ESP32 to MacBook backend
+
+**Port Configuration:**
+- **Backend API**: Port 3000 (default) - http://localhost:3000
+- **Frontend UI**: Port 8080 (default) - http://localhost:8080
+- **ESP32 connects to**: http://192.168.68.67:3000 (MacBook's WiFi IP)
+
+**Notes:** 
+- Port 5000 is in use by macOS ControlCenter, so avoid using it.
+- Both backend and frontend ports should be **configurable via environment variables** to avoid conflicts.
+
+**Quick Start for Development:**
+
+1. **Activate ESP-IDF Environment:**
+   ```bash
+   . $HOME/esp/esp-idf/export.sh
+   ```
+
+2. **Build and Flash ESP32 Firmware:**
+   ```bash
+   cd firmware/
+   idf.py build
+   idf.py -p /dev/tty.usbserial-* flash monitor
+   ```
+
+3. **Run Backend Server:**
+   ```bash
+   cd backend/
+   npm install  # or pip install -r requirements.txt for Python
+   PORT=3000 npm start    # or python app.py (configure to use port 3000)
+   ```
+
+4. **Run Frontend (in another terminal):**
+   ```bash
+   cd frontend/
+   npm install
+   PORT=8080 npm start    # Frontend will run on port 8080
+   ```
+
+5. **Access Web Interface:**
+   - Backend API: http://localhost:3000/api/
+   - Frontend: http://localhost:8080
+   
+   **Note:** Port 5000 is in use by macOS ControlCenter (AirPlay), so we use 3000 and 8080.
+
+### For Future Production Deployment (Environment #2)
+
+For deploying to a remote Ubuntu 20.04 server with multiple ESP32 devices:
 
 1. **Clone the repository:**
    ```bash
@@ -119,15 +253,16 @@ sound-monitoring-mesh/
 
 2. **Review the documentation:**
    - Start with the PRD for project requirements
-   - Review the Architecture Document for technical details
+   - Review the Architecture Document Section 8.1.2 for production deployment
    - Check the Hardware Design Document for hardware setup
+   - Review Component Pinout Reference for wiring
 
-3. **Development Environment Setup:**
-   - See Architecture Document Section 9.6 for MacBook setup
-   - See Architecture Document Section 9.7 for ESP-IDF installation
-   - See Architecture Document Section 8.5 for Ubuntu server setup
+3. **Production Server Setup:**
+   - See Architecture Document Section 8.5 for Ubuntu 20.04 setup
+   - Configure Nginx as reverse proxy
+   - Deploy backend and frontend applications
 
-### For Stakeholders
+### For Developers and Stakeholders
 
 Review the [Product Requirements Document](sound%20level%20mesh%20system%20PRD.md) for:
 - Project goals and objectives
@@ -159,13 +294,32 @@ Review the [Product Requirements Document](sound%20level%20mesh%20system%20PRD.m
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Documentation | ✅ Complete | All design documents finalized |
-| Hardware Purchase | ✅ Complete | All components purchased, awaiting delivery |
-| Hardware Verification | ⏳ Pending | ESP32-C3 I2S pins need verification upon receipt |
-| ESP32-C3 Firmware | ⏳ Not Started | ESP-IDF development pending hardware verification |
-| Backend API | ⏳ Not Started | Technology stack TBD |
-| Frontend Web App | ⏳ Not Started | Framework TBD |
-| Hardware Assembly | ⏳ Not Started | Awaiting hardware delivery |
-| Testing | ⏳ Not Started | Test plans to be developed |
+| **Component Pinout** | ✅ **Complete** | **ESP32-C3 and INMP441 pinouts verified** |
+| Hardware Purchase | ✅ Complete | All components purchased and delivered |
+| **Hardware Assembly** | ✅ **Complete** | **ESP32-C3 connected to INMP441 via I2S** |
+| **Dev Environment #1** | ✅ **Complete** | **MacBook setup with ESP-IDF, USB & WiFi ready** |
+| **ESP32-C3 Firmware** | ✅ **BUILT** | **Complete implementation, ready to flash** |
+| **Backend API** | ✅ **BUILT** | **Node.js server complete, ready to run** |
+| **Frontend Web App** | ✅ **BUILT** | **Dashboard complete, ready to serve** |
+| **Integration Testing** | ⏳ Next | Testing with Environment #1 |
+| Production Deployment | ⏳ Future | Environment #2 - Remote server |
+
+## 🔒 Security
+
+**⚠️ IMPORTANT: This repository does NOT contain sensitive credentials**
+
+Before committing to a public repository, sensitive files have been excluded via `.gitignore`:
+
+- `firmware/sound-level-sensor/sdkconfig` - WiFi credentials and server URLs
+- `backend/data/` - Device data, measurements, and logs
+- `.env` files - Environment variables
+
+**Setup Required:**
+1. Copy `firmware/sound-level-sensor/sdkconfig.example` to `sdkconfig`
+2. Run `idf.py menuconfig` and configure your WiFi credentials
+3. Backend creates data directories automatically on first run
+
+📖 **See [SECURITY.md](SECURITY.md) for complete security guide**
 
 ## 🤝 Contributing
 
@@ -187,7 +341,9 @@ For questions or inquiries about this project, please contact the project mainta
 
 ---
 
-**Last Updated:** 2024  
-**Project Phase:** Design and Planning  
-**Code Status:** No code generated yet
+**Last Updated:** January 30, 2026  
+**Project Phase:** ✅ Build Complete - Ready for Testing  
+**Code Status:** All components built and ready to deploy
+
+**📖 Next Steps:** See [QUICKSTART.md](QUICKSTART.md) for setup instructions
 

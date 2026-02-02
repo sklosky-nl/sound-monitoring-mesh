@@ -1,11 +1,12 @@
 # Sound Level Mesh System - Hardware Design Document
 
 ## Document Information
-- **Version:** 1.0
-- **Date:** 2024
-- **Status:** Draft
+- **Version:** 1.1
+- **Date:** February 1, 2026
+- **Status:** Production - Hardware Deployed
 - **Author:** Hardware Engineering Team
 - **Related Documents:** Sound Level Mesh System PRD, Architecture Document
+- **Deployment Status:** Hardware received, assembled, and operational
 
 ---
 
@@ -130,34 +131,50 @@ This document describes the hardware design for the Sound Level Mesh System moni
 
 ### 3.1 INMP441 to ESP32-C3 Connection
 
-**Note:** Pin assignments are preliminary and must be verified once ESP32-C3 hardware is received.
+**✅ Verified and Tested Configuration - Production Ready (February 2026)**
+
+Pin assignments have been implemented, tested in firmware, and confirmed operational. System is actively deployed with "Sensor 01" transmitting measurements every 5 seconds at 76-77 dB ambient levels.
 
 ```
 INMP441 Module          ESP32-C3 Board
 ─────────────────       ────────────────
-VDD              ──────> 3.3V (verify pin)
+VDD              ──────> 3.3V
 GND              ──────> GND
-SCK              ──────> GPIO X (I2S_BCLK - to be determined)
-WS               ──────> GPIO Y (I2S_WS - to be determined)
-SD               ──────> GPIO Z (I2S_DATA - to be determined)
+SCK              ──────> GPIO 5 (I2S_BCLK)
+WS               ──────> GPIO 6 (I2S_WS)
+SD               ──────> GPIO 4 (I2S_DATA)
 L/R              ──────> GND (for mono/left channel)
 ```
 
-### 3.2 Detailed Pin Connections (To Be Verified)
+**Deployment Status:**
+- ESP32-C3 Super Mini: ✅ Operational via USB-C power
+- INMP441 Module: ✅ Wired and functional
+- I2S Communication: ✅ Verified (16kHz sample rate, 32-bit containers)
+- Audio Sampling: ✅ Active (76-77 dB ambient sound levels measured)
+- WiFi Connectivity: ✅ Connected to backend server at 192.168.68.57:3000
+- Configuration System: ✅ Dynamic config fetch on startup and periodic refresh
+- Power: USB-C wall charger (from purchased batch)
+- Device ID: "Sensor 01" (note: requires URL encoding for spaces)
+
+**Important Notes for Additional Deployments:**
+- Device IDs with spaces require URL encoding (%20) in firmware
+- Configuration fetched automatically on startup from server
+- Periodic configuration refresh every 100 measurements (~5 minutes)
+- Default frequency bands: 20-200Hz, 200-2000Hz, 2000-8000Hz
+- Per-device calibration offset applied (currently 1.0 dB for "Sensor 01")
+
+### 3.2 Detailed Pin Connections (Verified)
 
 | INMP441 Pin | ESP32-C3 Pin | Function | Notes |
 |-------------|--------------|----------|-------|
-| VDD | 3.3V | Power Supply | Verify 3.3V output pin on ESP32-C3 board |
+| VDD | 3.3V | Power Supply | Connect to 3.3V output pin on ESP32-C3 board |
 | GND | GND | Ground | Common ground |
-| SCK | GPIO TBD | I2S Bit Clock | Verify I2S peripheral and GPIO assignment |
-| WS | GPIO TBD | I2S Word Select | Verify I2S peripheral and GPIO assignment |
-| SD | GPIO TBD | I2S Serial Data | Verify I2S peripheral and GPIO assignment |
+| SCK | GPIO 5 | I2S Bit Clock | I2S_BCK - Serial Clock |
+| WS | GPIO 6 | I2S Word Select | I2S_WS - Left/Right Clock |
+| SD | GPIO 4 | I2S Serial Data | I2S_DATA - Serial Data Input |
 | L/R | GND | Channel Select | Ground for left/mono channel |
 
-**Action Required:** Once ESP32-C3 boards are received, verify:
-1. I2S peripheral availability on ESP32-C3
-2. GPIO pin assignments for I2S on the specific board model
-3. 3.3V power output pin location
+**Status:** ✅ Verified and implemented in firmware. I2S peripheral confirmed functional on ESP32-C3.
 
 ### 3.3 Power Connections
 
@@ -188,11 +205,11 @@ L/R              ──────> GND (for mono/left channel)
                     │                 │   │
                     │ GND ────────────┼───┼───┐
                     │                 │   │   │
-                    │ GPIO 26 (BCLK) ─┼───┼───┼───┐
+                    │ GPIO 5 (BCLK) ──┼───┼───┼───┐
                     │                 │   │   │   │
-                    │ GPIO 25 (WS) ───┼───┼───┼───┼───┐
+                    │ GPIO 6 (WS) ────┼───┼───┼───┼───┐
                     │                 │   │   │   │   │
-                    │ GPIO 22 (DATA) ─┼───┼───┼───┼───┼───┐
+                    │ GPIO 4 (DATA) ──┼───┼───┼───┼───┼───┐
                     │                 │   │   │   │   │   │
                     └─────────────────┘   │   │   │   │   │
                                           │   │   │   │   │
@@ -262,8 +279,8 @@ L/R              ──────> GND (for mono/left channel)
    - Verify module is from purchased batch
 
 3. **Make Connections:**
-   - Connect power first: VDD to 3.3V (verify pin), GND to GND
-   - Connect I2S signals: SCK→GPIO (TBD), WS→GPIO (TBD), SD→GPIO (TBD)
+   - Connect power first: VDD to 3.3V, GND to GND
+   - Connect I2S signals: SCK→GPIO 5, WS→GPIO 6, SD→GPIO 4
    - Connect L/R to GND for mono operation
    - Use purchased jumper wires for connections
 
@@ -588,14 +605,14 @@ L/R              ──────> GND (for mono/left channel)
 
 ### A. Pin Reference Tables
 
-**ESP32-C3 GPIO Pin Functions (To Be Verified):**
-- I2S_DATA: GPIO TBD (Input) - Verify pin assignment
-- I2S_WS: GPIO TBD (Input) - Verify pin assignment
-- I2S_BCLK: GPIO TBD (Input) - Verify pin assignment
-- Boot button: GPIO TBD (Input, pull-up) - Verify pin assignment
-- Built-in LED: GPIO TBD (Output) - Verify if available
+**ESP32-C3 GPIO Pin Functions (Verified):**
+- I2S_DATA: GPIO 4 (Input) - Serial Data from INMP441
+- I2S_BCLK: GPIO 5 (Output) - Bit Clock to INMP441
+- I2S_WS: GPIO 6 (Output) - Word Select to INMP441
+- Boot button: GPIO 9 (Input, pull-up) - Standard on ESP32-C3
+- Built-in LED: GPIO 8 (Output) - Standard on ESP32-C3 Super Mini
 
-**Note:** ESP32-C3 has different GPIO pin assignments than standard ESP32. Pin assignments must be verified against the actual ESP32-C3 Super Mini board documentation once hardware is received.
+**Note:** Pin assignments verified and implemented in firmware. I2S peripheral confirmed functional on ESP32-C3.
 
 **INMP441 Pin Functions:**
 - VDD: Power (3.3V)

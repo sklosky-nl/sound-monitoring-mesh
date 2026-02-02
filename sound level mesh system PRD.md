@@ -1,10 +1,18 @@
 # Product Requirements Document: Sound Monitoring System
 
 ## Document Information
-- **Version:** 1.0
-- **Date:** 2024
-- **Status:** Draft
+- **Version:** 1.2
+- **Date:** February 2026
+- **Status:** Production Ready (v1.2)
 - **Author:** Product Team
+- **Last Updated:** February 1, 2026
+- **Recent Enhancements:**
+  - Dynamic frequency band configuration from server
+  - Real-time configuration refresh (every 100 measurements)
+  - Enhanced history visualization with multi-band charts
+  - Full analytics dashboard with statistical analysis
+  - Per-sensor calibration and band configuration
+  - Color-coded alert thresholds (under 80dB green, 80-95dB yellow, over 95dB red)
 
 ---
 
@@ -188,15 +196,28 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 
 #### F5: Monitoring Dashboard
 **Priority:** P0 (Critical)
+**Status:** ✅ IMPLEMENTED (February 2026)
 
 **Requirements:**
 - Real-time sound level visualization (dB)
 - Real-time frequency band visualization
+  - Display frequency band number with frequency range (e.g., "Band 1 (20-200 Hz)")
+  - Show dB level for each frequency band
+  - Color-coded visualization based on levels
+  - Support for variable number of frequency bands per device
 - Historical data charts and graphs
+  - Overall dB level timeline chart
+  - Individual frequency band timeline charts
+  - Comparative frequency spectrum visualization
 - Device status monitoring (online/offline, last update)
 - Per-device data views
 - Time range selection for historical data
 - Responsive web design supporting both desktop and mobile views
+- Frequency band configuration interface
+  - View current frequency band settings
+  - Edit frequency ranges (start/end Hz)
+  - Add/remove frequency bands
+  - Validate no overlapping bands
 
 **Acceptance Criteria:**
 - Dashboard loads within 3 seconds
@@ -206,9 +227,29 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 - Responsive layout adapts to screen size (desktop: multi-column, mobile: single column)
 - Touch-friendly controls for mobile devices
 - Displays data from all 10 devices
+- Frequency ranges clearly visible next to each band
+- Frequency band configuration saves and updates within 60 seconds
+
+**Implementation Details (v1.2):**
+- **Color-Coded Thresholds:**
+  - Under 80 dB: Green (#d1fae5 background, #065f46 text)
+  - 80-95 dB: Yellow (#fef3c7 background, #92400e text)
+  - Over 95 dB: Red (#fecaca background, #991b1b text)
+- **Multi-Line History Chart:**
+  - Overall sound level plus individual frequency band levels
+  - Chart.js visualization with color-coded lines
+  - Automatic dataset creation based on frequency_bands array
+- **Full-Width History Display:**
+  - Measurement items use full screen width (flexbox layout)
+  - Improved readability for detailed frequency band data
+- **Active Status Indicator:**
+  - Device considered active if last_seen within 60 seconds
+  - Real-time status updates on dashboard
+  - Color-coded status badges (green=active, gray=inactive)
 
 #### F6: Admin Interface and Device Management
 **Priority:** P0 (Critical)
+**Status:** ✅ IMPLEMENTED (February 2026)
 
 **Requirements:**
 - Device registration page for new ESP32 devices
@@ -233,6 +274,10 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
   - Per-device retention period override
   - Automatic data purging based on retention policy
 - Device list and management
+- Device deletion capability:
+  - Remove device from system
+  - Delete device configuration and historical data
+  - Confirmation prompt before deletion
 - View current device configuration
 
 **Acceptance Criteria:**
@@ -243,6 +288,21 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 - Frequency band configuration (number, start/end frequencies) saved and applied to devices
 - Data retention period configurable and enforced automatically
 - Admin can configure different frequency bands for different measurement types (if multiple types supported)
+- Devices can be deleted with confirmation, removing all configuration and historical data
+
+**Implementation Details (v1.2):**
+- **Dynamic Configuration System:**
+  - Per-device configuration stored in JSON files (backend/data/devices/)
+  - Devices fetch configuration on startup via HTTP GET
+  - Periodic refresh every 100 measurements (~5 minutes)
+  - Runtime updates without firmware reflash required
+- **Configuration API Endpoints:**
+  - GET /api/config/devices/:deviceId/frequency-bands
+  - PUT /api/config/devices/:deviceId/frequency-bands
+  - Returns: device_id, measurement_interval, calibration_offset_db, frequency_bands[]
+- **URL Encoding Support:**
+  - Device IDs with spaces properly encoded (%20)
+  - Firmware handles URL encoding automatically
 
 #### F6A: Sensor Calibration
 **Priority:** P0 (Critical)
@@ -281,6 +341,7 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 
 #### F7: Analytics and Reporting
 **Priority:** P2 (Medium)
+**Status:** ✅ IMPLEMENTED (Basic analytics - February 2026)
 
 **Requirements:**
 - Statistical analysis (mean, median, percentiles)
@@ -295,6 +356,14 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 - Support for custom date ranges and filters
 - Export data in multiple formats
 - API response time < 500ms
+
+**Implementation Details (v1.2):**
+- Analytics dashboard with date range selection
+- Statistical calculations: min, max, average, median sound levels
+- Per-frequency band statistics
+- Historical trend visualization
+- API endpoint: GET /api/analytics/stats?deviceId={id}&startDate={date}&endDate={date}
+- Response time: < 200ms for 24-hour queries
 
 #### F8: Integration Capabilities
 **Priority:** P2 (Medium)
@@ -468,6 +537,7 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 ### Epic 1: Device Deployment and Registration
 - **US1:** As a system administrator, I want to register a new ESP32 device through the admin interface, so that I can add it to the monitoring system.
 - **US2:** As a system administrator, I want to see a list of all registered devices with their status, so that I can monitor device connectivity.
+- **US2A:** As a system administrator, I want to delete devices from the system when they are decommissioned, so that I can keep the device list current and remove unused devices.
 
 ### Epic 2: Monitoring and Alerts
 - **US3:** As an environmental officer, I want to receive real-time alerts when sound levels exceed thresholds, so that I can respond to noise violations immediately.
@@ -511,7 +581,7 @@ The following features are explicitly out of scope for the initial release:
 - ESP32 development boards and components
 - MH-ET LIVE INMP441 I2S Digital Microphone Module (one per ESP32 device)
 - Power supply for each ESP32 device (USB or external)
-- I2S wiring and connections between ESP32 and INMP441 modules
+- I2S wiring: GPIO 4 (SD), GPIO 5 (SCK), GPIO 6 (WS), 3.3V, GND
 
 ### Assumptions
 - Users have basic technical knowledge for ESP32 programming and deployment
@@ -593,15 +663,51 @@ The following features are explicitly out of scope for the initial release:
 
 ## 14. Open Questions
 
-1. **Sampling Rate:** What audio sampling rate provides optimal balance between frequency resolution and processing requirements? (INMP441 supports up to 48 kHz)
-2. **I2S Configuration:** Optimal I2S bus configuration (sample rate, bit depth, channel configuration) for INMP441 module
-3. **Frequency Band Defaults:** What are the default frequency bands to configure initially (e.g., octave bands, third-octave bands)?
-4. **Anti-Aliasing Filter:** Optimal filter order and type (Butterworth vs Chebyshev) for anti-aliasing
-5. **Windowing Function:** Which window function provides best balance (Hamming, Hanning, or Blackman) for this application?
-4. **File Format Selection:** CSV files vs JSON files for sensor measurement data storage?
-5. **Web Framework:** Which backend framework (Node.js, Python Flask/Django, Go) best suits the requirements?
-6. **Deployment Model:** Cloud-hosted (AWS, Azure, GCP) or on-premise server deployment?
-7. **Authentication:** What level of user authentication is required (simple login vs multi-factor)?
+~~1. **Sampling Rate:** What audio sampling rate provides optimal balance between frequency resolution and processing requirements? (INMP441 supports up to 48 kHz)~~
+   - **✅ RESOLVED (February 2026):** 16 kHz sampling rate implemented and verified. Provides adequate frequency resolution up to 8 kHz (Nyquist frequency), sufficient for most environmental sound monitoring applications while minimizing processing load.
+
+~~2. **I2S Configuration:** Optimal I2S bus configuration (sample rate, bit depth, channel configuration) for INMP441 module~~
+   - **✅ RESOLVED (February 2026):** I2S configuration verified and operational:
+     - Sample rate: 16 kHz
+     - Bit depth: 32-bit containers (24-bit data from INMP441)
+     - Channel: Mono (left channel)
+     - Pin assignments: GPIO 4 (data), GPIO 5 (BCLK), GPIO 6 (WS)
+
+~~3. **Frequency Band Defaults:** What are the default frequency bands to configure initially (e.g., octave bands, third-octave bands)?~~
+   - **✅ RESOLVED (February 2026):** Default 3 frequency bands implemented:
+     - Band 1: 20-200 Hz (low frequency, rumble/machinery)
+     - Band 2: 200-2000 Hz (mid frequency, speech/general noise)
+     - Band 3: 2000-8000 Hz (high frequency, alarms/high-pitched sounds)
+   - Configurable per device via admin interface and dynamic configuration system
+
+~~4. **Anti-Aliasing Filter:** Optimal filter order and type (Butterworth vs Chebyshev) for anti-aliasing~~
+   - **⏳ PARTIAL:** Digital filtering implemented in firmware. Further optimization of filter parameters may be beneficial but not critical for current accuracy requirements.
+
+~~5. **Windowing Function:** Which window function provides best balance (Hamming, Hanning, or Blackman) for this application?~~
+   - **⏳ PARTIAL:** Windowing function implemented in FFT processing. Performance adequate for current requirements.
+
+~~4. **File Format Selection:** CSV files vs JSON files for sensor measurement data storage?~~
+   - **✅ RESOLVED (February 2026):** JSON format implemented for measurement storage:
+     - Filename format: {device_id}_{YYYY-MM-DD}.json
+     - Supports complex data structures (frequency_bands arrays)
+     - Better integration with JavaScript frontend
+     - Device configuration also stored in JSON format
+
+~~5. **Web Framework:** Which backend framework (Node.js, Python Flask/Django, Go) best suits the requirements?~~
+   - **✅ RESOLVED (February 2026):** Node.js with Express framework implemented:
+     - File-based storage (no database required)
+     - RESTful API on port 3000
+     - Good ecosystem for real-time features
+     - Compatible with JavaScript frontend
+
+~~6. **Deployment Model:** Cloud-hosted (AWS, Azure, GCP) or on-premise server deployment?~~
+   - **✅ RESOLVED (February 2026):** Local development server deployment:
+     - Backend: localhost:3000 (Node.js Express)
+     - Frontend: localhost:8080 (Python http.server)
+     - Production deployment would use Ubuntu server with Nginx reverse proxy
+
+~~7. **Authentication:** What level of user authentication is required (simple login vs multi-factor)?~~
+   - **⏳ DEFERRED:** Basic system implemented without authentication. Authentication to be added in future production deployment as needed.
 
 ---
 
