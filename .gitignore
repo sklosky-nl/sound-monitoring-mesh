@@ -53,6 +53,7 @@ logs/
 .env
 .env.local
 .env.*.local
+*.local
 
 # Data files (if containing sensitive info)
 data/measurements/

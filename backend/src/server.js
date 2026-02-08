@@ -17,6 +17,10 @@ const dataRoutes = require('./routes/data');
 const configRoutes = require('./routes/config');
 const alertRoutes = require('./routes/alerts');
 const analyticsRoutes = require('./routes/analytics');
+const positionRoutes = require('./routes/positions');
+const barrierRoutes = require('./routes/barriers');
+const sourceRoutes = require('./routes/sources');
+const triangulationRoutes = require('./routes/triangulation');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,19 +62,21 @@ app.use('/api/data', dataRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/positions', positionRoutes);
+app.use('/api/barriers', barrierRoutes);
+app.use('/api/sources', sourceRoutes);
+app.use('/api/triangulation', triangulationRoutes);
+// Legacy device registration endpoint (for backward compatibility)
+// MUST be last to avoid catching other /api/* routes
+app.use('/api', deviceRoutes);
 
-// Root endpoint
+// Serve static frontend files
+const frontendPath = path.join(__dirname, '../../frontend');
+app.use(express.static(frontendPath));
+
+// Serve index.html for root route
 app.get('/', (req, res) => {
-    res.json({
-        name: 'Sound Level Mesh System API',
-        version: '1.0.0',
-        endpoints: {
-            health: '/health',
-            devices: '/api/devices',
-            data: '/api/data',
-            config: '/api/config'
-        }
-    });
+    res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // Error handling middleware

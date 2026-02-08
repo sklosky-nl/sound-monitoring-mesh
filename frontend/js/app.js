@@ -2,12 +2,32 @@
  * Main application JavaScript
  */
 
+// Check if API is loaded
+if (typeof API === 'undefined') {
+    console.error('API module failed to load');
+    document.addEventListener('DOMContentLoaded', () => {
+        document.body.innerHTML = '<div style="padding: 40px; text-align: center;"><h1 style="color: red;">Error: API module not loaded</h1><p>Please refresh the page. If the problem persists, check the browser console for errors.</p></div>';
+    });
+    throw new Error('API module not loaded');
+}
+
 // State management
 const State = {
     devices: [],
     selectedDevice: null,
     refreshInterval: null
 };
+
+// Helper function to format date for datetime-local input
+function formatDateTimeLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async () => {
@@ -53,6 +73,9 @@ async function onTabChange(tabName) {
         case 'devices':
             await loadDevicesList();
             break;
+        case 'triangulation':
+            await initTriangulation();
+            break;
         case 'history':
             await populateDeviceSelect();
             initHistoryChart();
@@ -70,7 +93,7 @@ async function onTabChange(tabName) {
 
 // Modal handling
 function initModals() {
-    const modals = ['registerModal', 'calibrationModal', 'alertModal'];
+    const modals = ['registerModal', 'calibrationModal', 'editDeviceModal', 'alertModal', 'sensorPositionModal', 'barrierModal'];
     const closeButtons = document.querySelectorAll('.close');
 
     // Open buttons
@@ -108,6 +131,9 @@ function initEventListeners() {
     // Register form
     document.getElementById('registerForm')?.addEventListener('submit', handleRegisterDevice);
     
+    // Edit device form
+    document.getElementById('editDeviceForm')?.addEventListener('submit', handleEditDevice);
+    
     // Calibration form
     document.getElementById('calibrationForm')?.addEventListener('submit', handleCalibration);
     
@@ -126,19 +152,22 @@ function initEventListeners() {
     document.getElementById('cleanupBtn')?.addEventListener('click', runCleanup);
     document.getElementById('exportDataBtn')?.addEventListener('click', () => API.exportJSON());
     
-    // Set default dates for history
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Set default dates for history (24 hours ago to now, with second precision)
+    const now = new Date();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // Format for datetime-local input: YYYY-MM-DDTHH:mm:ss
     const endDateEl = document.getElementById('endDate');
     const startDateEl = document.getElementById('startDate');
-    if (endDateEl) endDateEl.value = today;
-    if (startDateEl) startDateEl.value = yesterday;
+    if (endDateEl) endDateEl.value = formatDateTimeLocal(now);
+    if (startDateEl) startDateEl.value = formatDateTimeLocal(yesterday);
     
-    // Set default dates for analytics
+    // Set default dates for analytics (date inputs, not datetime-local)
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const yesterdayDate = yesterday.toISOString().split('T')[0];
     const analyticsEndDateEl = document.getElementById('analyticsEndDate');
     const analyticsStartDateEl = document.getElementById('analyticsStartDate');
     if (analyticsEndDateEl) analyticsEndDateEl.value = today;
-    if (analyticsStartDateEl) analyticsStartDateEl.value = yesterday;
+    if (analyticsStartDateEl) analyticsStartDateEl.value = yesterdayDate;
 }
 
 // Load devices
@@ -162,6 +191,14 @@ async function loadDevices() {
 // Update dashboard
 async function updateDashboard() {
     const devicesGrid = document.getElementById('devicesGrid');
+    
+    console.log('updateDashboard called, devices:', State.devices.length);
+    
+    if (!devicesGrid) {
+        console.error('devicesGrid element not found!');
+        return;
+    }
+    
     devicesGrid.innerHTML = '';
 
     if (State.devices.length === 0) {
@@ -179,24 +216,22 @@ async function updateDashboard() {
     document.getElementById('totalDevices').textContent = State.devices.length;
     document.getElementById('activeDevices').textContent = activeDevices.length;
 
-    // Get latest measurements for each device
+    // Display devices with their latest measurements
     let totalDb = 0;
     let count = 0;
 
     for (const device of State.devices) {
-        try {
-            const data = await API.getLatestMeasurements(device.device_id, 1);
-            const latest = data.measurements[0];
+        // Use latest_measurement from device data (already included by backend)
+        const latest = device.latest_measurement;
+        
+        console.log(`Device ${device.device_id}:`, latest ? `${latest.db_level} dB` : 'no data');
 
-            const card = createDeviceCard(device, latest);
-            devicesGrid.appendChild(card);
+        const card = createDeviceCard(device, latest);
+        devicesGrid.appendChild(card);
 
-            if (latest) {
-                totalDb += latest.db_level;
-                count++;
-            }
-        } catch (error) {
-            console.error(`Failed to load data for ${device.device_id}:`, error);
+        if (latest && latest.db_level) {
+            totalDb += latest.db_level;
+            count++;
         }
     }
 
@@ -207,6 +242,8 @@ async function updateDashboard() {
 
     // Update last update time
     document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+    
+    console.log(`Dashboard updated: ${count} devices with measurements`);
 }
 
 // Create device card
@@ -227,7 +264,7 @@ function createDeviceCard(device, latest) {
     
     card.innerHTML = `
         <div class="device-header">
-            <h3>${device.name}</h3>
+            <h3>${device.nickname || device.name}</h3>
             <span class="device-id">${device.device_id}</span>
         </div>
         <div class="device-location">${device.location || 'Unknown location'}</div>
@@ -272,7 +309,7 @@ async function loadDevicesList() {
 
         deviceItem.innerHTML = `
             <div class="device-info">
-                <h3>${device.name}</h3>
+                <h3>${device.nickname || device.name}</h3>
                 <p><strong>ID:</strong> ${device.device_id}</p>
                 <p><strong>MAC:</strong> ${device.mac_address}</p>
                 <p><strong>Location:</strong> ${device.location}</p>
@@ -282,7 +319,7 @@ async function loadDevicesList() {
             <div class="device-actions">
                 <button class="btn btn-secondary" onclick="editDevice('${device.device_id}')">Edit</button>
                 <button class="btn btn-secondary" onclick="openCalibrationModal('${device.device_id}', ${device.calibration_offset_db})">Calibrate</button>
-                <button class="btn btn-danger" onclick="deleteDevice('${device.device_id}', '${device.name}')">Delete</button>
+                <button class="btn btn-danger" onclick="deleteDevice('${device.device_id}', '${device.nickname || device.name}')">Delete</button>
             </div>
         `;
 
@@ -298,6 +335,7 @@ async function handleRegisterDevice(e) {
         device_id: document.getElementById('deviceId').value,
         mac_address: document.getElementById('macAddress').value,
         name: document.getElementById('deviceName').value,
+        nickname: document.getElementById('deviceNickname').value,
         location: document.getElementById('deviceLocation').value
     };
 
@@ -332,7 +370,7 @@ async function populateDeviceSelect() {
     State.devices.forEach(device => {
         const option = document.createElement('option');
         option.value = device.device_id;
-        option.textContent = `${device.name} (${device.device_id})`;
+        option.textContent = `${device.nickname || device.name} (${device.device_id})`;
         select.appendChild(option);
     });
     
@@ -356,8 +394,15 @@ async function loadHistory() {
         return;
     }
 
+    // Convert datetime-local format to ISO 8601 for API
+    const startDateTime = startDate ? new Date(startDate).toISOString() : null;
+    const endDateTime = endDate ? new Date(endDate).toISOString() : null;
+
     try {
-        const data = await API.getMeasurements(deviceId, { start_date: startDate, end_date: endDate });
+        const data = await API.getMeasurements(deviceId, { 
+            start_date: startDateTime, 
+            end_date: endDateTime 
+        });
         
         if (data.measurements.length === 0) {
             container.innerHTML = '<p class="empty-message">No measurements found for this period</p>';
@@ -471,8 +516,59 @@ function showError(message) {
 }
 
 function editDevice(deviceId) {
-    alert(`Device editing not yet implemented for ${deviceId}`);
-    // TODO: Implement device editing
+    const device = State.devices.find(d => d.device_id === deviceId);
+    if (!device) {
+        alert('Device not found');
+        return;
+    }
+
+    // Populate the edit form
+    document.getElementById('editDeviceId').value = device.device_id;
+    document.getElementById('editDeviceName').value = device.name;
+    document.getElementById('editDeviceNickname').value = device.nickname || device.name;
+    document.getElementById('editDeviceLocation').value = device.location || '';
+    
+    // Clear previous result
+    document.getElementById('editDeviceResult').innerHTML = '';
+    
+    // Show the modal
+    document.getElementById('editDeviceModal').style.display = 'block';
+}
+
+// Handle edit device form submission
+async function handleEditDevice(e) {
+    e.preventDefault();
+
+    const deviceId = document.getElementById('editDeviceId').value;
+    const nickname = document.getElementById('editDeviceNickname').value;
+    const location = document.getElementById('editDeviceLocation').value;
+
+    try {
+        // Update nickname using the specific endpoint
+        await API.updateDeviceNickname(deviceId, nickname);
+        
+        // Update location using the general update endpoint
+        if (location) {
+            await API.updateDevice(deviceId, { location });
+        }
+        
+        document.getElementById('editDeviceResult').innerHTML = `
+            <div class="success">Device updated successfully!</div>
+        `;
+
+        // Reload devices
+        await loadDevices();
+        await loadDevicesList();
+
+        // Close modal after a short delay
+        setTimeout(() => {
+            document.getElementById('editDeviceModal').style.display = 'none';
+        }, 1500);
+    } catch (error) {
+        document.getElementById('editDeviceResult').innerHTML = `
+            <div class="error">Failed to update device: ${error.message}</div>
+        `;
+    }
 }
 
 // Delete device
@@ -600,7 +696,7 @@ async function populateAlertDeviceSelect() {
     State.devices.forEach(device => {
         const option = document.createElement('option');
         option.value = device.device_id;
-        option.textContent = `${device.name} (${device.device_id})`;
+        option.textContent = `${device.nickname || device.name} (${device.device_id})`;
         select.appendChild(option);
     });
 }
@@ -668,7 +764,7 @@ async function populateAnalyticsDeviceSelect() {
     State.devices.forEach(device => {
         const option = document.createElement('option');
         option.value = device.device_id;
-        option.textContent = `${device.name} (${device.device_id})`;
+        option.textContent = `${device.nickname || device.name} (${device.device_id})`;
         select.appendChild(option);
     });
 }
@@ -741,7 +837,7 @@ window.viewFrequencyConfig = async function(deviceId) {
                     <button class="close-button" onclick="closeFrequencyConfigModal()">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p><strong>Device:</strong> ${device.name} (${device.device_id})</p>
+                    <p><strong>Device:</strong> ${device.nickname || device.name} (${device.device_id})</p>
                     <div class="frequency-bands-form">
                         ${bandsHtml}
                     </div>

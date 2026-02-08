@@ -13,11 +13,15 @@
         <header>
             <h1>🔊 Sound Level Mesh System</h1>
             <p class="subtitle">Real-time Sound Monitoring Dashboard</p>
+            <a href="kiosk.html" target="_blank" class="kiosk-link" title="Open Public Kiosk Display">
+                📺 Kiosk Display
+            </a>
         </header>
 
         <nav class="tabs">
             <button class="tab-button active" data-tab="dashboard">Dashboard</button>
             <button class="tab-button" data-tab="devices">Devices</button>
+            <button class="tab-button" data-tab="triangulation">Triangulation</button>
             <button class="tab-button" data-tab="history">History</button>
             <button class="tab-button" data-tab="alerts">Alerts</button>
             <button class="tab-button" data-tab="analytics">Analytics</button>
@@ -63,6 +67,80 @@
             </div>
         </div>
 
+        <!-- Triangulation Tab -->
+        <div id="triangulation" class="tab-content">
+            <div class="section-header">
+                <h2>Sound Source Triangulation</h2>
+                <div class="triangulation-controls">
+                    <button class="btn btn-secondary" id="configureSensorsBtn">Configure Sensors</button>
+                    <button class="btn btn-secondary" id="configureBarriersBtn">Configure Barriers</button>
+                    <button class="btn btn-primary" id="triangulateNowBtn">Triangulate Now</button>
+                </div>
+            </div>
+
+            <div class="triangulation-container">
+                <!-- Map View -->
+                <div class="map-panel">
+                    <div class="map-controls">
+                        <label>
+                            <input type="checkbox" id="showSensors" checked> Sensors
+                        </label>
+                        <label>
+                            <input type="checkbox" id="showBarriers" checked> Barriers
+                        </label>
+                        <label>
+                            <input type="checkbox" id="showSources" checked> Sound Sources
+                        </label>
+                        <label>
+                            <input type="checkbox" id="showHeatmap"> Heatmap
+                        </label>
+                        <button class="btn-small" id="resetViewBtn">Reset View</button>
+                    </div>
+                    <canvas id="triangulationMap"></canvas>
+                </div>
+
+                <!-- Info Panel -->
+                <div class="info-panel">
+                    <h3>Detected Sound Sources</h3>
+                    <div class="filter-controls">
+                        <select id="timeRangeSelect">
+                            <option value="5">Last 5 minutes</option>
+                            <option value="15">Last 15 minutes</option>
+                            <option value="60">Last hour</option>
+                            <option value="1440">Last 24 hours</option>
+                        </select>
+                    </div>
+                    <div id="sourcesList" class="sources-list">
+                        <p class="empty-message">No sound sources detected yet</p>
+                    </div>
+                    
+                    <h3>Sensor Status</h3>
+                    <div id="sensorStatusList" class="sensor-status-list">
+                        <!-- Sensor status will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card-small">
+                    <h4>Total Events</h4>
+                    <p id="totalEvents">0</p>
+                </div>
+                <div class="stat-card-small">
+                    <h4>Avg Confidence</h4>
+                    <p id="avgConfidence">0%</p>
+                </div>
+                <div class="stat-card-small">
+                    <h4>Active Sensors</h4>
+                    <p id="activeSensors">0</p>
+                </div>
+                <div class="stat-card-small">
+                    <h4>Barriers Defined</h4>
+                    <p id="totalBarriers">0</p>
+                </div>
+            </div>
+        </div>
+
         <!-- History Tab -->
         <div id="history" class="tab-content">
             <div class="section-header">
@@ -71,8 +149,10 @@
                     <select id="historyDeviceSelect">
                         <option value="">Select Device...</option>
                     </select>
-                    <input type="date" id="startDate" title="Start Date">
-                    <input type="date" id="endDate" title="End Date">
+                    <label for="startDate" style="margin-left: 10px; font-size: 0.9em;">Start:</label>
+                    <input type="datetime-local" id="startDate" title="Start Date and Time" step="1">
+                    <label for="endDate" style="margin-left: 10px; font-size: 0.9em;">End:</label>
+                    <input type="datetime-local" id="endDate" title="End Date and Time" step="1">
                     <button class="btn btn-primary" id="loadHistoryBtn">Load History</button>
                     <button class="btn btn-secondary" id="exportHistoryBtn">Export CSV</button>
                 </div>
@@ -172,8 +252,14 @@
                     <input type="text" id="macAddress" required placeholder="AA:BB:CC:DD:EE:FF">
                 </div>
                 <div class="form-group">
-                    <label for="deviceName">Name:</label>
-                    <input type="text" id="deviceName" placeholder="Living Room Sensor">
+                    <label for="deviceName">Name (Internal):</label>
+                    <input type="text" id="deviceName" placeholder="Sound Sensor 001">
+                    <small>Internal device identifier (optional, defaults to Device ID)</small>
+                </div>
+                <div class="form-group">
+                    <label for="deviceNickname">Nickname (Display Name):</label>
+                    <input type="text" id="deviceNickname" placeholder="Living Room Sensor">
+                    <small>Friendly name shown throughout the system (optional)</small>
                 </div>
                 <div class="form-group">
                     <label for="deviceLocation">Location:</label>
@@ -200,6 +286,33 @@
                 <button type="submit" class="btn btn-primary">Save Calibration</button>
             </form>
             <div id="calibrationResult" class="result-message"></div>
+        </div>
+    </div>
+
+    <!-- Modal for editing device -->
+    <div id="editDeviceModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-modal="editDeviceModal">&times;</span>
+            <h2>Edit Device</h2>
+            <form id="editDeviceForm">
+                <input type="hidden" id="editDeviceId">
+                <div class="form-group">
+                    <label for="editDeviceName">Device Name (Internal):</label>
+                    <input type="text" id="editDeviceName" readonly placeholder="Device ID or MAC">
+                    <small>This is the internal device identifier and cannot be changed</small>
+                </div>
+                <div class="form-group">
+                    <label for="editDeviceNickname">Device Nickname (Display Name):</label>
+                    <input type="text" id="editDeviceNickname" required placeholder="e.g., Living Room Sensor">
+                    <small>This name will be displayed throughout the system</small>
+                </div>
+                <div class="form-group">
+                    <label for="editDeviceLocation">Location:</label>
+                    <input type="text" id="editDeviceLocation" placeholder="e.g., Living Room, North Wall">
+                </div>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </form>
+            <div id="editDeviceResult" class="result-message"></div>
         </div>
     </div>
 
@@ -244,8 +357,175 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=3"></script>
+    <!-- Modal for sensor position configuration -->
+    <div id="sensorPositionModal" class="modal">
+        <div class="modal-content modal-wide">
+            <span class="close" data-modal="sensorPositionModal">&times;</span>
+            <h2>Configure Sensor Positions</h2>
+            <div class="position-config-container">
+                <div class="position-list">
+                    <h3>Sensors</h3>
+                    <div id="sensorPositionList">
+                        <!-- List will be populated dynamically -->
+                    </div>
+                </div>
+                <div class="position-editor">
+                    <h3>Edit Position</h3>
+                    <form id="positionForm">
+                        <input type="hidden" id="positionDeviceId">
+                        <div class="form-group">
+                            <label>Device:</label>
+                            <p id="positionDeviceName" class="form-display">-</p>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="positionX">X Position (m):</label>
+                                <input type="number" id="positionX" step="0.1" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="positionY">Y Position (m):</label>
+                                <input type="number" id="positionY" step="0.1" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="positionZ">Z Position (m):</label>
+                                <input type="number" id="positionZ" step="0.1" value="0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="positionHeight">Installation Height (m):</label>
+                            <input type="number" id="positionHeight" step="0.1" value="1.5">
+                            <small>Height above floor/ground</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="positionSystem">Coordinate System:</label>
+                            <select id="positionSystem">
+                                <option value="cartesian">Cartesian (X, Y, Z in meters)</option>
+                                <option value="geographic">Geographic (Lat, Lon, Elevation)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="positionAccuracy">Position Accuracy (±m):</label>
+                            <input type="number" id="positionAccuracy" step="0.1" value="1.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="positionNotes">Notes:</label>
+                            <textarea id="positionNotes" rows="3" placeholder="e.g., Mounted on north wall, 2m from corner"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Position</button>
+                    </form>
+                </div>
+            </div>
+            <div id="positionResult" class="result-message"></div>
+        </div>
+    </div>
+
+    <!-- Modal for barrier configuration -->
+    <div id="barrierModal" class="modal">
+        <div class="modal-content modal-wide">
+            <span class="close" data-modal="barrierModal">&times;</span>
+            <h2>Configure Acoustic Barriers</h2>
+            <div class="barrier-config-container">
+                <div class="barrier-list">
+                    <h3>Barriers</h3>
+                    <button class="btn btn-small btn-primary" id="addBarrierBtn">+ Add Barrier</button>
+                    <div id="barrierListItems">
+                        <!-- List will be populated dynamically -->
+                    </div>
+                </div>
+                <div class="barrier-editor">
+                    <h3 id="barrierEditorTitle">New Barrier</h3>
+                    <form id="barrierForm">
+                        <input type="hidden" id="barrierId">
+                        <div class="form-group">
+                            <label for="barrierName">Name:</label>
+                            <input type="text" id="barrierName" required placeholder="e.g., North Wall">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="barrierType">Type:</label>
+                                <select id="barrierType" required>
+                                    <option value="wall">Solid Wall</option>
+                                    <option value="curtain">Curtain</option>
+                                    <option value="partition">Partition</option>
+                                    <option value="door">Door</option>
+                                    <option value="window">Window</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="barrierMaterial">Material:</label>
+                                <select id="barrierMaterial" required>
+                                    <option value="concrete_wall">Concrete Wall</option>
+                                    <option value="drywall_single">Drywall (Single)</option>
+                                    <option value="drywall_double">Drywall (Double)</option>
+                                    <option value="brick_wall">Brick Wall</option>
+                                    <option value="metal_panel">Metal Panel</option>
+                                    <option value="glass_window">Glass Window</option>
+                                    <option value="vinyl_curtain_heavy">Vinyl Curtain (Heavy)</option>
+                                    <option value="vinyl_curtain_light">Vinyl Curtain (Light)</option>
+                                    <option value="fabric_curtain">Fabric Curtain</option>
+                                    <option value="acoustic_curtain">Acoustic Curtain</option>
+                                    <option value="wood_door">Wood Door</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Geometry (Line Barrier):</label>
+                            <div class="form-row">
+                                <div>
+                                    <label for="barrierStartX">Start X (m):</label>
+                                    <input type="number" id="barrierStartX" step="0.1" required>
+                                </div>
+                                <div>
+                                    <label for="barrierStartY">Start Y (m):</label>
+                                    <input type="number" id="barrierStartY" step="0.1" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div>
+                                    <label for="barrierEndX">End X (m):</label>
+                                    <input type="number" id="barrierEndX" step="0.1" required>
+                                </div>
+                                <div>
+                                    <label for="barrierEndY">End Y (m):</label>
+                                    <input type="number" id="barrierEndY" step="0.1" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="barrierHeight">Height (m):</label>
+                                <input type="number" id="barrierHeight" step="0.1" value="2.5" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="barrierThickness">Thickness (m):</label>
+                                <input type="number" id="barrierThickness" step="0.01" value="0.1" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="barrierTransmissionLoss">Transmission Loss (dB):</label>
+                            <input type="number" id="barrierTransmissionLoss" step="1" value="15" required>
+                            <small id="materialHint">Auto-filled based on material</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="barrierNotes">Notes:</label>
+                            <textarea id="barrierNotes" rows="2" placeholder="Additional information"></textarea>
+                        </div>
+                        <div class="form-buttons">
+                            <button type="submit" class="btn btn-primary">Save Barrier</button>
+                            <button type="button" class="btn btn-secondary" id="deleteBarrierBtn">Delete</button>
+                            <button type="button" class="btn btn-secondary" id="cancelBarrierBtn">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div id="barrierResult" class="result-message"></div>
+        </div>
+    </div>
+
+    <script src="js/api.js?v=7"></script>
     <script src="js/charts.js?v=3"></script>
-    <script src="js/app.js?v=3"></script>
+    <script src="js/app.js?v=7"></script>
+    <script src="js/triangulation.js?v=1"></script>
 </body>
 </html>

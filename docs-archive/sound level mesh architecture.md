@@ -1,12 +1,12 @@
 # Sound Level Mesh System - Architecture Document
 
 ## Document Information
-- **Version:** 1.2
-- **Date:** 2024 (Updated: February 1, 2026)
-- **Status:** Active - Production Implementation
+- **Version:** 1.4
+- **Date:** 2024 (Updated: February 2, 2026)
+- **Status:** Active - Production Implementation with Sound Triangulation and Kiosk Display
 - **Author:** Engineering Team
 - **Related Documents:** Sound Level Mesh System PRD
-- **Latest Updates:** Dynamic frequency band configuration, enhanced visualization, analytics dashboard
+- **Latest Updates:** Public kiosk display for 1080p monitors, Sound source triangulation (Hybrid TDoA + RSS), sensor position configuration, acoustic barrier modeling, dynamic frequency band configuration, enhanced visualization, analytics dashboard
 
 ---
 
@@ -35,14 +35,15 @@ The [Component Pinout Reference](COMPONENT_PINOUT_REFERENCE.md) document contain
 
 ## 1. Executive Summary
 
-This document describes the technical architecture for the Sound Level Mesh System, a distributed monitoring solution consisting of 10 ESP32-based WiFi sensor devices communicating with a central web server. The architecture is designed for real-time sound level monitoring, configurable frequency band analysis, and flexible data management.
+This document describes the technical architecture for the Sound Level Mesh System, a distributed monitoring solution consisting of 10 ESP32-based WiFi sensor devices communicating with a central web server. The architecture is designed for real-time sound level monitoring, configurable frequency band analysis, sound source triangulation and localization, and flexible data management.
 
 ### Architecture Principles
 - **Centralized Processing:** All data processing and storage occurs on the central server
+- **Spatial Awareness:** Sound source localization using Hybrid TDoA + RSS triangulation
 - **Star Topology:** ESP32 devices connect directly to the central server via WiFi
 - **RESTful Communication:** HTTP-based API for device-server communication (unencrypted)
-- **Web-Based Interface:** Browser-accessible monitoring and administration
-- **Configurable Design:** Flexible frequency band and retention period configuration
+- **Web-Based Interface:** Browser-accessible monitoring, administration, and spatial visualization
+- **Configurable Design:** Flexible frequency band, position, and acoustic environment configuration
 
 ---
 
@@ -87,21 +88,32 @@ This document describes the technical architecture for the Sound Level Mesh Syst
 
 ### 2.2 Component Overview
 
-The system consists of three main components:
+The system consists of four main components:
 
 1. **ESP32 Sensor Devices (10 units)**
    - Custom firmware for audio sampling and processing
    - WiFi connectivity for data transmission
    - Local audio processing (FFT for frequency bands)
+   - Microsecond-precision event detection and timestamping
+   - Configured with spatial position information
 
 2. **Central Web Server**
    - Backend API server
-   - Web application (monitoring and admin interfaces)
+   - Web application (monitoring, admin, spatial visualization, and public kiosk display)
    - File-based storage for data storage and configuration
+   - Triangulation engine (TDoA + RSS algorithms)
+   - Acoustic environment modeling with barrier effects
 
-3. **WiFi Infrastructure**
+3. **Spatial Configuration System**
+   - Sensor position management (Cartesian or Geographic coordinates)
+   - Acoustic barrier definition (walls, curtains, partitions)
+   - Material properties database (transmission loss, reflection)
+   - Interactive map visualization
+
+4. **WiFi Infrastructure**
    - Access point/router connecting devices to server
    - Network security (WPA2/WPA3)
+   - NTP server access for time synchronization
 
 ---
 
@@ -385,12 +397,36 @@ The system consists of three main components:
      - Desktop view: Full form layouts, side-by-side panels
      - Mobile view: Stacked forms, collapsible sections, touch-friendly inputs
 
-3. **Components:**
+3. **Spatial Visualization Interface**
+   - Interactive map for sensor positions
+   - Acoustic barrier definition interface
+   - Real-time sound source markers
+   - Historical event playback
+   - Coverage area visualization
+
+4. **Public Kiosk Display**
+   - Large-format display optimized for 1080p (1920x1080)
+   - Passive viewing without user interaction
+   - Real-time workshop map with sensor locations
+   - Live sensor status and dB readings
+   - Triangulated sound source visualization
+   - Auto-refresh every 5-10 seconds
+   - Minimal UI chrome for maximum content display
+   - High-contrast design for various lighting conditions
+   - Large, legible fonts (18px+ body, 24px+ headings)
+   - Separate endpoint (e.g., /kiosk.html or /display.html)
+   - Compatible with kiosk software (Xibo, Chrome kiosk mode)
+   - Designed for 24+ hour continuous operation
+
+5. **Components:**
    - Device status widget
    - Real-time chart component
    - Historical chart component
    - Frequency band editor
    - Configuration form components
+   - Interactive map component
+   - Sound source marker component
+   - Kiosk display component
    - **Responsive Components:**
      - Adaptive navigation (hamburger menu for mobile)
      - Responsive tables (scrollable or card view on mobile)
@@ -676,6 +712,116 @@ Web Browser                    Web Server                    File System
      │                            │                              │
 ```
 
+### 4.4 Sound Source Triangulation Flow (v1.3)
+
+```
+ESP32 Sensors                 Central Server                    Web Browser
+(Multiple Devices)            (Triangulation Engine)           (Map Interface)
+     │                               │                              │
+     │  1. Continuous Monitoring     │                              │
+     │     (All sensors)             │                              │
+     │                               │                              │
+     │  2. SOUND EVENT DETECTED!     │                              │
+     │     (Threshold exceeded)      │                              │
+     │     Capture:                  │                              │
+     │     - Onset timestamp (μs)    │                              │
+     │     - Peak dB level           │                              │
+     │     - Duration                │                              │
+     │                               │                              │
+     │  3. POST Event Data           │                              │
+     │  ────────────────────────────>│                              │
+     │  (Sensor A: t=0μs, 95dB)     │                              │
+     │                               │                              │
+     │  3. POST Event Data           │                              │
+     │  ────────────────────────────>│                              │
+     │  (Sensor B: t=1245μs, 88dB)  │                              │
+     │                               │                              │
+     │  3. POST Event Data           │                              │
+     │  ────────────────────────────>│                              │
+     │  (Sensor C: t=2890μs, 82dB)  │                              │
+     │                               │                              │
+     │                               │  4. Event Correlation         │
+     │                               │     - Group events by time    │
+     │                               │     - Require 3+ sensors      │
+     │                               │     - Within 100ms window     │
+     │                               │                              │
+     │                               │  5. TDoA Calculation         │
+     │                               │     - Time differences        │
+     │                               │     - Speed of sound (343m/s) │
+     │                               │     - Distance differences    │
+     │                               │                              │
+     │                               │  6. RSS Calculation          │
+     │                               │     - dB level comparison     │
+     │                               │     - Inverse square law      │
+     │                               │     - Distance estimates      │
+     │                               │                              │
+     │                               │  7. Barrier Effects          │
+     │                               │     - Check acoustic paths    │
+     │                               │     - Apply transmission loss │
+     │                               │     - Adjust estimates        │
+     │                               │                              │
+     │                               │  8. Hybrid Localization      │
+     │                               │     - Combine TDoA + RSS      │
+     │                               │     - Multilateration solve   │
+     │                               │     - Calculate confidence    │
+     │                               │     - Estimated position (x,y)│
+     │                               │                              │
+     │                               │  9. Store Result             │
+     │                               │     source_locations/         │
+     │                               │     {date}.json               │
+     │                               │                              │
+     │                               │  10. Broadcast Update        │
+     │                               │  ───────────────────────────>│
+     │                               │  (WebSocket/SSE)             │
+     │                               │                              │
+     │                               │                              │  11. Display on Map
+     │                               │                              │      - Sensor positions
+     │                               │                              │      - Barriers
+     │                               │                              │      - Sound source marker
+     │                               │                              │      - Confidence circle
+     │                               │                              │      - Event details
+```
+
+**Triangulation Algorithm Flow:**
+
+```
+Event Correlation:
+  ├─ Collect events from multiple sensors
+  ├─ Group by temporal proximity (±100ms)
+  ├─ Require minimum 3 sensors for 2D
+  └─ Validate time synchronization quality
+
+TDoA Processing:
+  ├─ Select reference sensor (earliest detection)
+  ├─ Calculate Δt for each sensor pair
+  ├─ Convert to distance differences: Δd = c × Δt
+  ├─ Set up hyperbolic equations
+  └─ Solve using iterative least squares
+
+RSS Processing:
+  ├─ Compare dB levels across sensors
+  ├─ Apply inverse square law: d = d₀ × 10^((L₀-L)/(10n))
+  ├─ Account for environmental path loss
+  └─ Estimate distance from each sensor
+
+Barrier Effects:
+  ├─ For each sensor → source path:
+  │   ├─ Check intersection with barriers
+  │   ├─ Apply transmission loss (walls: 15-30dB, curtains: 5-15dB)
+  │   └─ Adjust distance/dB estimates
+  └─ Weight sensors with clear paths higher
+
+Hybrid Fusion:
+  ├─ Weight TDoA result (high for impulse sounds)
+  ├─ Weight RSS result (high for continuous sounds)
+  ├─ Combine: Position = α×TDoA + (1-α)×RSS
+  ├─ Refine using Kalman filter
+  └─ Calculate confidence score (0-100%)
+
+Result Output:
+  └─ {timestamp, position(x,y,z), confidence, method, contributing_sensors[]}
+```
+
 ---
 
 ## 5. Network Architecture
@@ -749,11 +895,17 @@ backend/
 │   │   │   ├── devices.js          # Device management routes
 │   │   │   ├── data.js              # Data collection routes
 │   │   │   ├── config.js            # Configuration routes
+│   │   │   ├── positions.js         # Sensor position routes (NEW v1.3)
+│   │   │   ├── barriers.js          # Acoustic barrier routes (NEW v1.3)
+│   │   │   ├── sources.js           # Sound source location routes (NEW v1.3)
 │   │   │   └── monitoring.js        # Monitoring routes
 │   │   ├── controllers/
 │   │   │   ├── deviceController.js
 │   │   │   ├── dataController.js
-│   │   │   └── configController.js
+│   │   │   ├── configController.js
+│   │   │   ├── positionController.js      # Position management (NEW v1.3)
+│   │   │   ├── barrierController.js       # Barrier management (NEW v1.3)
+│   │   │   └── sourceController.js        # Source location queries (NEW v1.3)
 │   │   └── middleware/
 │   │       ├── auth.js              # Authentication middleware
 │   │       ├── validation.js        # Input validation
@@ -763,11 +915,17 @@ backend/
 │   │   ├── dataService.js           # Data processing logic
 │   │   ├── configService.js         # Configuration management
 │   │   ├── calibrationService.js     # Calibration logic and offset application
-│   │   └── retentionService.js       # Data retention logic
+│   │   ├── retentionService.js       # Data retention logic
+│   │   ├── triangulationService.js   # TDoA + RSS triangulation (NEW v1.3)
+│   │   ├── eventCorrelationService.js # Event detection and correlation (NEW v1.3)
+│   │   └── acousticModelService.js    # Barrier effects and path loss (NEW v1.3)
 │   ├── models/
-│   │   ├── Device.js                # Device model
-│   │   ├── Measurement.js           # Measurement model
-│   │   └── FrequencyBand.js         # Frequency band model
+│   │   ├── Device.js                # Device model (enhanced with position)
+│   │   ├── Measurement.js           # Measurement model (enhanced with onset)
+│   │   ├── FrequencyBand.js         # Frequency band model
+│   │   ├── SensorPosition.js        # Sensor position model (NEW v1.3)
+│   │   ├── AcousticBarrier.js       # Barrier definition model (NEW v1.3)
+│   │   └── SourceLocation.js        # Triangulated source model (NEW v1.3)
 │   ├── storage/
 │   │   ├── configManager.js         # JSON config file handler
 │   │   ├── measurementWriter.js     # CSV/JSON measurement writer
@@ -776,7 +934,9 @@ backend/
 │   │   └── retentionManager.js       # Data retention and cleanup
 │   ├── utils/
 │   │   ├── logger.js                # Logging utility
-│   │   └── validators.js            # Validation helpers
+│   │   ├── validators.js            # Validation helpers
+│   │   ├── mathUtils.js             # Multilateration algorithms (NEW v1.3)
+│   │   └── geometryUtils.js          # Geometric calculations (NEW v1.3)
 │   └── server.js                    # Application entry point
 ├── config/
 │   ├── storage.js                   # Storage configuration

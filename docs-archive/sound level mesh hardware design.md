@@ -1,18 +1,20 @@
 # Sound Level Mesh System - Hardware Design Document
 
 ## Document Information
-- **Version:** 1.1
-- **Date:** February 1, 2026
-- **Status:** Production - Hardware Deployed
+- **Version:** 1.3
+- **Date:** February 2, 2026
+- **Status:** Production - Hardware Deployed with Triangulation and Kiosk Display Support
 - **Author:** Hardware Engineering Team
 - **Related Documents:** Sound Level Mesh System PRD, Architecture Document
-- **Deployment Status:** Hardware received, assembled, and operational
+- **Deployment Status:** Hardware received, assembled, and operational. Triangulation configuration ready. Kiosk display hardware requirements defined.
+- **New Features (v1.3):** Public kiosk display hardware requirements for 1080p monitors
+- **New Features (v1.2):** Position calibration requirements, acoustic environment considerations for triangulation
 
 ---
 
 ## 1. Executive Summary
 
-This document describes the hardware design for the Sound Level Mesh System monitoring devices. Each device consists of an ESP32-C3 microcontroller connected to an MH-ET LIVE INMP441 I2S Digital Microphone Module. The system requires 10 identical monitoring devices communicating via WiFi to a central web server.
+This document describes the hardware design for the Sound Level Mesh System monitoring devices. Each device consists of an ESP32-C3 microcontroller connected to an MH-ET LIVE INMP441 I2S Digital Microphone Module. The system requires 10 identical monitoring devices communicating via WiFi to a central web server. Version 1.2 adds support for sound source triangulation via Hybrid TDoA + RSS localization.
 
 ### Hardware Components
 - **Microcontroller:** ESP32-C3 Development Board (4MB flash)
@@ -20,6 +22,10 @@ This document describes the hardware design for the Sound Level Mesh System moni
 - **Power Supply:** USB Wall Charger Adapter (5V)
 - **Power Cable:** USB-C Charging Cable
 - **Enclosure:** Weather-resistant housing (to be determined)
+- **Installation Requirements (NEW v1.2):**
+  - Precise position measurement tools (tape measure, laser distance meter)
+  - Mounting hardware for fixed positions
+  - Documentation of acoustic barriers in environment
 
 ### Purchased Hardware Status
 
@@ -599,9 +605,233 @@ L/R              ──────> GND (for mono/left channel)
 - Document assembly procedures
 - Create assembly jigs if producing multiple units
 
+### 12.3 Triangulation Deployment Considerations (NEW v1.2)
+
+#### Sensor Placement Strategy
+- **Minimum Requirements:**
+  - 3 sensors for 2D localization (4+ recommended for redundancy)
+  - 4 sensors for 3D localization (6+ recommended)
+  - 10-sensor deployment provides excellent coverage and accuracy
+  
+- **Optimal Placement:**
+  - Distribute sensors around perimeter of monitored area
+  - Avoid collinear arrangements (sensors in straight line)
+  - Mix installation heights for 3D capability
+  - Maximum 50m between sensors for good time synchronization
+  - Ensure WiFi coverage at all sensor positions
+
+- **Position Measurement:**
+  - Use tape measure or laser distance meter for accuracy
+  - Measure from common origin point (room corner, building reference)
+  - Record X, Y, Z coordinates ±1 meter accuracy minimum
+  - Measure installation height above floor/ground
+  - Document coordinates in system configuration
+
+#### Acoustic Environment Documentation
+- **Solid Wall Barriers:**
+  - Document position and extent of concrete, drywall, metal walls
+  - Note wall thickness and material type
+  - Typical transmission loss:
+    - Concrete wall: 25-35 dB
+    - Drywall (single layer): 15-20 dB
+    - Metal panel: 20-30 dB
+    - Brick wall: 25-30 dB
+  
+- **Flexible Barrier Curtains:**
+  - Document floor-to-ceiling vinyl curtains
+  - Note fabric thickness and weight
+  - Typical transmission loss:
+    - Heavy vinyl curtain: 10-15 dB
+    - Light fabric curtain: 5-10 dB
+    - Acoustic curtain (specialized): 15-20 dB
+  
+- **Other Acoustic Features:**
+  - Windows and glass doors: 15-25 dB transmission loss
+  - Open doorways: 0 dB (no barrier)
+  - Furniture and equipment: Variable absorption (2-8 dB)
+
+#### Installation Checklist for Triangulation
+- [ ] Measure and record sensor position coordinates (X, Y, Z)
+- [ ] Measure installation height above floor for each sensor
+- [ ] Document accuracy of position measurements (±cm)
+- [ ] Map all solid walls with dimensions
+- [ ] Map all curtain barriers with material type
+- [ ] Verify WiFi signal strength at all positions (>-70 dBm recommended)
+- [ ] Ensure NTP server access for time synchronization
+- [ ] Test with known sound source to verify triangulation accuracy
+- [ ] Document coordinate system origin and axes orientation
+
+#### Time Synchronization Requirements
+- **NTP Configuration:**
+  - Router or dedicated NTP server on local network
+  - Target accuracy: ±10ms for good RSS localization
+  - Target accuracy: ±1ms for high-quality TDoA localization
+  - Update interval: Every 1 hour
+  - Monitor clock drift between updates
+
+- **Network Latency:**
+  - Keep all sensors on same WiFi network
+  - Minimize WiFi hops and routing delays
+  - Avoid VPN or complex network routing
+  - Monitor RTT (Round Trip Time) to NTP server
+
 ---
 
-## 13. Appendix
+## 14. Public Kiosk Display Hardware Requirements (NEW v1.3)
+
+### 14.1 Display Hardware Specifications
+
+**Required Hardware for Kiosk Installation:**
+
+- **Display Monitor:**
+  - Resolution: 1920x1080 (1080p Full HD) - Required
+  - Size: 32-55 inches recommended for viewing from 3-5 meters
+  - Display type: LCD or LED (LED preferred for better contrast)
+  - Brightness: Minimum 300 nits (500+ nits recommended for bright environments)
+  - Contrast ratio: Minimum 1000:1 (3000:1+ recommended)
+  - Viewing angle: 178° horizontal and vertical
+  - Response time: 8ms or faster
+  - VESA mount compatible (optional, for wall mounting)
+
+- **Computer/Media Player:**
+  - **Option 1 - Raspberry Pi 4 (Recommended for budget):**
+    - Model: Raspberry Pi 4 Model B (4GB or 8GB RAM)
+    - Storage: 32GB microSD card (Class 10 or better)
+    - HDMI 2.0 output (supports 1080p60)
+    - Ethernet or WiFi connectivity
+    - Cost: ~$55-75 plus accessories
+  - **Option 2 - Small Form Factor PC:**
+    - Intel NUC or similar mini PC
+    - Minimum: Intel Core i3, 4GB RAM, 128GB SSD
+    - HDMI 2.0 output
+    - Ethernet or WiFi connectivity
+    - Cost: ~$200-400
+  - **Option 3 - Dedicated Media Player:**
+    - BrightSign, ChromeBox, or similar digital signage player
+    - Built-in browser or web display capability
+    - Network connectivity
+    - Cost: ~$300-600
+
+- **Networking:**
+  - Wired Ethernet connection (strongly recommended)
+  - Alternatively: Stable WiFi connection with >-60 dBm signal strength
+  - Access to central web server on same network or via internet
+
+- **Mounting and Installation:**
+  - Wall mount bracket (VESA compatible) or display stand
+  - Cable management solutions
+  - Power outlets: 2 outlets (display + computer)
+  - Surge protector recommended
+
+### 14.2 Software Requirements
+
+**Operating System Options:**
+- **Raspberry Pi OS Lite** (for Raspberry Pi) with Chromium browser in kiosk mode
+- **Windows 10/11** with Chrome or Edge in kiosk mode
+- **Linux** (Ubuntu, Debian) with Chromium or Firefox in kiosk mode
+- **Chrome OS** (for ChromeBox)
+- **Xibo Player** or similar digital signage software
+
+**Browser Configuration (Kiosk Mode):**
+- Chrome/Chromium kiosk mode: `chromium-browser --kiosk --noerrdialogs --disable-infobars --incognito http://server-address/kiosk.html`
+- Full-screen mode enabled
+- Auto-start on boot
+- Disable screen saver and sleep mode
+- Auto-refresh disabled (page handles its own updates)
+- Crash recovery enabled
+
+**Network Configuration:**
+- Static IP address recommended (prevents DHCP issues)
+- DNS configured to reach central server
+- Firewall allows HTTP/HTTPS to server
+- NTP time synchronization enabled
+
+### 14.3 Kiosk Installation Checklist
+
+- [ ] **Display Setup:**
+  - [ ] Monitor mounted or placed in desired location
+  - [ ] Display resolution set to 1920x1080
+  - [ ] Brightness adjusted for ambient lighting
+  - [ ] Display input set to HDMI
+
+- [ ] **Computer Setup:**
+  - [ ] Computer/player connected to display via HDMI
+  - [ ] Operating system installed and updated
+  - [ ] Browser installed and configured for kiosk mode
+  - [ ] Auto-login configured
+  - [ ] Screen saver disabled
+  - [ ] Sleep mode disabled
+  - [ ] Power management set to "never sleep"
+
+- [ ] **Network Configuration:**
+  - [ ] Network connection established (Ethernet or WiFi)
+  - [ ] IP address assigned (static or DHCP)
+  - [ ] Central server accessible via browser
+  - [ ] Kiosk URL bookmarked: http://server-address/kiosk.html
+
+- [ ] **Kiosk Mode Configuration:**
+  - [ ] Browser configured to auto-start on boot
+  - [ ] Browser opens to kiosk URL in full-screen mode
+  - [ ] Navigation bars and toolbars hidden
+  - [ ] Right-click disabled (optional security measure)
+  - [ ] F11 or Esc key disabled (optional, prevents exiting full-screen)
+
+- [ ] **Testing:**
+  - [ ] Verify display shows kiosk page correctly
+  - [ ] Confirm data updates every 5-10 seconds
+  - [ ] Check readability from 3-5 meters away
+  - [ ] Test 24-hour continuous operation
+  - [ ] Verify auto-recovery after power loss or network disconnection
+  - [ ] Confirm sensors and sound sources display correctly
+
+### 14.4 Recommended Hardware Configurations
+
+**Budget Configuration (~$150-250):**
+- 32" 1080p LCD monitor (VESA mount)
+- Raspberry Pi 4 Model B (4GB RAM)
+- 32GB microSD card
+- Official Raspberry Pi power supply
+- HDMI cable (2m)
+- Ethernet cable or WiFi dongle
+- Wall mount bracket
+
+**Standard Configuration (~$400-600):**
+- 43-50" 1080p LED monitor (commercial grade)
+- Intel NUC or similar mini PC (i3, 8GB RAM, 256GB SSD)
+- HDMI cable (2m)
+- Wired Ethernet connection
+- VESA wall mount
+- Wireless keyboard/mouse (for initial setup)
+
+**Professional Configuration (~$800-1500):**
+- 55" commercial-grade 1080p display (high brightness)
+- BrightSign or professional digital signage player
+- Managed network switch for reliable connectivity
+- Professional mounting system
+- Backup power supply (UPS)
+- Remote management software (Xibo CMS, etc.)
+
+### 14.5 Maintenance Considerations
+
+- **Monthly:**
+  - Verify kiosk display is operational
+  - Check for dust accumulation on display and computer
+  - Verify data is updating correctly
+
+- **Quarterly:**
+  - Update operating system and browser
+  - Clean display screen
+  - Check cable connections
+
+- **Annually:**
+  - Deep clean display and computer
+  - Update kiosk software/configuration
+  - Verify mounting hardware is secure
+  - Test backup/recovery procedures
+
+---
+
+## 15. Appendix
 
 ### A. Pin Reference Tables
 

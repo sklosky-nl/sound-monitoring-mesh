@@ -13,6 +13,7 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_system.h"
+#include "esp_mac.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -20,12 +21,14 @@
 #include "esp_netif.h"
 #include "esp_http_client.h"
 #include "esp_sntp.h"
+#include "mdns.h"
 #include "driver/i2s_std.h"
 #include "esp_dsp.h"
 #include "cJSON.h"
 
 // Configuration
-#define DEVICE_ID "Sensor 01"
+// Device ID will be set dynamically based on MAC address
+static char device_id[32];  // Global device ID based on MAC address
 #define WIFI_SSID CONFIG_WIFI_SSID
 #define WIFI_PASS CONFIG_WIFI_PASSWORD
 #define SERVER_URL CONFIG_SERVER_URL
@@ -57,6 +60,25 @@ typedef struct {
     float level;
 } freq_band_t;
 
+// Event Detection Configuration
+#define EVENT_THRESHOLD_DB 55.0f  // Threshold for detecting sound events
+#define EVENT_RISE_RATE_DB_PER_SEC 5.0f  // Minimum rise rate to consider it an event
+#define EVENT_MIN_DURATION_MS 50  // Minimum duration to be considered an event
+#define EVENT_MAX_DURATION_MS 5000  // Maximum duration to track
+#define EVENT_COOLDOWN_MS 500  // Cooldown period after event ends
+
+typedef struct {
+    bool is_active;
+    int64_t onset_timestamp_us;  // Microsecond timestamp when event started
+    float peak_amplitude_db;
+    int64_t peak_timestamp_us;
+    int32_t duration_ms;
+    float onset_db;
+    float previous_db;
+    int64_t event_start_time;
+    int64_t last_above_threshold_time;
+} event_detector_t;
+
 // Calibration offset (configurable from server)
 static float calibration_offset_db = 0.0f;
 
@@ -76,6 +98,19 @@ static freq_band_t frequency_bands[NUM_BANDS] = {
     {3, 2000, 8000, 0}
 };
 
+// Event detector state
+static event_detector_t event_detector = {
+    .is_active = false,
+    .onset_timestamp_us = 0,
+    .peak_amplitude_db = 0,
+    .peak_timestamp_us = 0,
+    .duration_ms = 0,
+    .onset_db = 0,
+    .previous_db = 30.0f,  // Start with minimum expected level
+    .event_start_time = 0,
+    .last_above_threshold_time = 0
+};
+
 // HTTP response buffer for configuration
 #define CONFIG_BUFFER_SIZE 2048
 static char config_buffer[CONFIG_BUFFER_SIZE];
@@ -85,10 +120,10 @@ static int config_buffer_index = 0;
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                               int32_t event_id, void* event_data);
 static void init_wifi(void);
+static void init_mdns(void);
 static void init_i2s(void);
 static void init_sntp(void);
 static void audio_sampling_task(void *pvParameters);
-static void data_transmission_task(void *pvParameters);
 static float calculate_db_level(float* magnitude, int size);
 static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sample_rate);
 static void apply_hamming_window(float* samples, int size);
@@ -164,9 +199,31 @@ static void init_wifi(void)
 
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to WiFi SSID:%s", WIFI_SSID);
+        // Initialize mDNS after WiFi is connected
+        init_mdns();
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s", WIFI_SSID);
     }
+}
+
+// Initialize mDNS
+static void init_mdns(void)
+{
+    ESP_LOGI(TAG, "Initializing mDNS...");
+    esp_err_t err = mdns_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mDNS Init failed: %d", err);
+        return;
+    }
+    
+    // Set hostname for this device (use last 6 chars of device_id to keep it short)
+    char mdns_hostname[64];
+    size_t id_len = strlen(device_id);
+    const char *short_id = (id_len > 6) ? (device_id + id_len - 6) : device_id;
+    snprintf(mdns_hostname, sizeof(mdns_hostname), "sound-sensor-%s", short_id);
+    mdns_hostname_set(mdns_hostname);
+    
+    ESP_LOGI(TAG, "mDNS initialized. Hostname: %s.local", mdns_hostname);
 }
 
 // Initialize I2S for INMP441 microphone
@@ -224,6 +281,57 @@ static esp_err_t config_http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
+// Register device with server
+static bool register_device(void)
+{
+    ESP_LOGI(TAG, "Registering device with server...");
+    
+    // Build JSON payload
+    char payload[384];
+    snprintf(payload, sizeof(payload),
+             "{\"device_id\":\"%s\",\"mac_address\":\"%s\",\"name\":\"Sound Sensor %s\",\"location\":\"Unknown\",\"api_key\":\"%s\"}",
+             device_id, device_id, device_id, API_KEY);
+    
+    // Build URL
+    char url[256];
+    snprintf(url, sizeof(url), "%s/api/register", SERVER_URL);
+    ESP_LOGI(TAG, "Registration URL: %s", url);
+    ESP_LOGI(TAG, "Payload: %s", payload);
+    
+    esp_http_client_config_t config = {
+        .url = url,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 10000,
+    };
+    
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    
+    // Set headers
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, payload, strlen(payload));
+    
+    esp_err_t err = esp_http_client_perform(client);
+    bool success = false;
+    
+    if (err == ESP_OK) {
+        int status_code = esp_http_client_get_status_code(client);
+        ESP_LOGI(TAG, "Registration response status: %d", status_code);
+        
+        if (status_code == 201 || status_code == 409) {
+            // 201 = created, 409 = already exists (both are OK)
+            ESP_LOGI(TAG, "Device registered successfully");
+            success = true;
+        } else {
+            ESP_LOGW(TAG, "Registration failed with status: %d", status_code);
+        }
+    } else {
+        ESP_LOGW(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
+    }
+    
+    esp_http_client_cleanup(client);
+    return success;
+}
+
 // Fetch configuration from server
 static void fetch_configuration(void)
 {
@@ -237,14 +345,18 @@ static void fetch_configuration(void)
     char url[256];
     char encoded_device_id[64];
     
-    // Simple URL encoding for device ID (replace spaces with %20)
-    const char *src = DEVICE_ID;
+    // URL encoding for device ID (encode special characters like : and spaces)
+    const char *src = device_id;
     char *dst = encoded_device_id;
     while (*src && (dst - encoded_device_id) < sizeof(encoded_device_id) - 4) {
         if (*src == ' ') {
             *dst++ = '%';
             *dst++ = '2';
             *dst++ = '0';
+        } else if (*src == ':') {
+            *dst++ = '%';
+            *dst++ = '3';
+            *dst++ = 'A';
         } else {
             *dst++ = *src;
         }
@@ -439,6 +551,82 @@ static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sa
     }
 }
 
+// Get microsecond-precision timestamp
+// This function combines NTP-synchronized time with microsecond precision from esp_timer
+static int64_t get_microsecond_timestamp(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    
+    // Convert to microseconds since Unix epoch
+    int64_t timestamp_us = (int64_t)tv.tv_sec * 1000000LL + (int64_t)tv.tv_usec;
+    
+    return timestamp_us;
+}
+
+// Detect sound events based on amplitude and rise rate
+static void detect_sound_event(float current_db, int64_t current_time_us)
+{
+    // Calculate rise rate (dB per second)
+    float db_change = current_db - event_detector.previous_db;
+    float rise_rate = db_change; // We sample every 1 second, so this is already dB/sec
+    
+    if (!event_detector.is_active) {
+        // Check if we should start tracking an event
+        if (current_db > EVENT_THRESHOLD_DB && rise_rate > EVENT_RISE_RATE_DB_PER_SEC) {
+            // Event detected!
+            event_detector.is_active = true;
+            event_detector.onset_timestamp_us = current_time_us;
+            event_detector.onset_db = current_db;
+            event_detector.peak_amplitude_db = current_db;
+            event_detector.peak_timestamp_us = current_time_us;
+            event_detector.event_start_time = current_time_us;
+            event_detector.last_above_threshold_time = current_time_us;
+            event_detector.duration_ms = 0;
+            
+            ESP_LOGI(TAG, "EVENT DETECTED: Onset at %lld us, Level: %.1f dB, Rise: %.1f dB/s",
+                     event_detector.onset_timestamp_us, current_db, rise_rate);
+        }
+    } else {
+        // Event is active, update tracking
+        int64_t elapsed_ms = (current_time_us - event_detector.event_start_time) / 1000;
+        
+        // Update peak if current level is higher
+        if (current_db > event_detector.peak_amplitude_db) {
+            event_detector.peak_amplitude_db = current_db;
+            event_detector.peak_timestamp_us = current_time_us;
+        }
+        
+        // Update duration
+        event_detector.duration_ms = (int32_t)elapsed_ms;
+        
+        // Track last time above threshold
+        if (current_db > EVENT_THRESHOLD_DB) {
+            event_detector.last_above_threshold_time = current_time_us;
+        }
+        
+        // Check if event has ended
+        int64_t time_since_threshold = (current_time_us - event_detector.last_above_threshold_time) / 1000;
+        bool event_ended = (time_since_threshold > EVENT_COOLDOWN_MS) || 
+                          (elapsed_ms > EVENT_MAX_DURATION_MS);
+        
+        if (event_ended && elapsed_ms >= EVENT_MIN_DURATION_MS) {
+            ESP_LOGI(TAG, "EVENT ENDED: Duration: %ld ms, Peak: %.1f dB at %lld us",
+                     event_detector.duration_ms, event_detector.peak_amplitude_db,
+                     event_detector.peak_timestamp_us);
+            
+            // Event will be sent with next measurement transmission
+            // Don't reset here - let the transmission task read the data first
+        } else if (event_ended) {
+            // Event too short, discard
+            ESP_LOGD(TAG, "Event discarded (too short): %ld ms", elapsed_ms);
+            event_detector.is_active = false;
+        }
+    }
+    
+    event_detector.previous_db = current_db;
+}
+
 // Audio sampling and processing task
 static void audio_sampling_task(void *pvParameters)
 {
@@ -570,7 +758,7 @@ static esp_err_t send_measurement_data(float db_level, freq_band_t* bands, int n
     
     // Create JSON payload
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "device_id", DEVICE_ID);
+    cJSON_AddStringToObject(root, "device_id", device_id);
     cJSON_AddStringToObject(root, "timestamp", timestamp);
     cJSON_AddNumberToObject(root, "db_level", db_level);
     cJSON_AddNumberToObject(root, "db_level_raw", db_level - calibration_offset_db);
@@ -631,6 +819,13 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "Sound Level Sensor Starting...");
     
+    // Initialize device ID from MAC address
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);
+    snprintf(device_id, sizeof(device_id), "%02x:%02x:%02x:%02x:%02x:%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    ESP_LOGI(TAG, "Device ID: %s", device_id);
+    
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -647,6 +842,23 @@ void app_main(void)
     
     // Wait a bit for time sync
     vTaskDelay(pdMS_TO_TICKS(2000));
+    
+    // Register device with server
+    int registration_retries = 3;
+    bool registered = false;
+    while (registration_retries > 0 && !registered) {
+        registered = register_device();
+        if (!registered) {
+            ESP_LOGW(TAG, "Registration failed, retrying... (%d attempts left)", registration_retries - 1);
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            registration_retries--;
+        }
+    }
+    
+    if (!registered) {
+        ESP_LOGE(TAG, "Failed to register device after multiple attempts");
+        // Continue anyway - device may already be registered
+    }
     
     // Fetch configuration from server
     fetch_configuration();

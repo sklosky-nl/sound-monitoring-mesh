@@ -1,12 +1,16 @@
 # Product Requirements Document: Sound Monitoring System
 
 ## Document Information
-- **Version:** 1.2
+- **Version:** 1.4
 - **Date:** February 2026
-- **Status:** Production Ready (v1.2)
+- **Status:** Production Ready with Sound Source Triangulation and Public Kiosk Display (v1.4)
 - **Author:** Product Team
-- **Last Updated:** February 1, 2026
+- **Last Updated:** February 2, 2026
 - **Recent Enhancements:**
+  - **Public kiosk display for 1080p monitors (v1.4)**
+  - **Sound source triangulation and localization (v1.3)**
+  - **Sensor position configuration interface (v1.3)**
+  - **Acoustic environment mapping with barrier definition (v1.3)**
   - Dynamic frequency band configuration from server
   - Real-time configuration refresh (every 100 measurements)
   - Enhanced history visualization with multi-band charts
@@ -22,7 +26,9 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 
 ### Key Value Propositions
 - **Real-time Monitoring:** Continuous sound level monitoring with low-latency WiFi data transmission
+- **Sound Source Localization:** Hybrid TDoA + RSS triangulation to identify the position of sound sources
 - **Configurable Analysis:** Customizable frequency bands for targeted sound analysis
+- **Spatial Awareness:** Sensor position mapping and acoustic environment modeling with barrier definition
 - **Centralized Management:** Web-based administration and monitoring interface
 - **Cost-Effective:** ESP32-based devices provide affordable, capable monitoring nodes
 - **Flexible Configuration:** Adjustable measurement parameters and data retention policies
@@ -40,11 +46,12 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 - Limited visibility into sound patterns and trends over time
 
 ### Target Use Cases
-- **Environmental Monitoring:** Noise pollution tracking in urban and industrial areas
-- **Security & Safety:** Intrusion detection, gunshot detection, emergency event monitoring
-- **Industrial Monitoring:** Equipment health monitoring, predictive maintenance
-- **Smart City Applications:** Traffic noise management, event monitoring
-- **Research & Development:** Acoustic research, wildlife monitoring, urban planning
+- **Environmental Monitoring:** Noise pollution tracking and source identification in urban and industrial areas
+- **Security & Safety:** Intrusion detection, gunshot detection with location, emergency event monitoring and source tracking
+- **Industrial Monitoring:** Equipment health monitoring, predictive maintenance, noisy equipment localization
+- **Smart City Applications:** Traffic noise management with source mapping, event monitoring with position tracking
+- **Research & Development:** Acoustic research, wildlife monitoring with position tracking, urban planning with spatial noise analysis
+- **Facility Management:** Identifying specific noise sources in large facilities, tracking sound-generating activities
 
 ---
 
@@ -60,6 +67,7 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 ### Success Metrics
 - **System Reliability:** 95% uptime per device
 - **Data Accuracy:** ±2 dB accuracy in sound level measurements
+- **Localization Accuracy:** 2-5 meters for TDoA, 5-15 meters for RSS triangulation
 - **Data Transmission:** 99% successful data delivery to central server
 - **Configuration:** All device settings configurable via admin web interface
 - **Data Retention:** Configurable retention period with default of 7 days
@@ -337,6 +345,199 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 - Support for both overall dB offset and per-band offsets (if implemented)
 - Calibration values stored in JSON configuration files
 
+#### F6B: Sound Source Triangulation and Localization
+**Priority:** P1 (High)
+**Status:** 🚧 PLANNED (v1.3)
+
+**Requirements:**
+- **Localization Methods:**
+  - **Hybrid TDoA + RSS Approach:** Combines Time Difference of Arrival with Received Signal Strength for improved accuracy
+  - **TDoA (Time Difference of Arrival):** Uses precise time differences when sound reaches different sensors
+    - Requires microsecond-precision time synchronization via NTP
+    - Best for impulse/transient sounds (gunshots, loud impacts, sharp noises)
+    - Accuracy: 2-5 meters with 4+ sensors and good time sync
+  - **RSS (Received Signal Strength):** Uses inverse square law based on dB level comparisons
+    - Compares sound intensity across sensors to estimate distance
+    - Best for continuous sounds and approximate localization
+    - Accuracy: 5-15 meters (affected by reflections and obstacles)
+  - **Hybrid Mode:** Automatically selects or combines both methods based on sound characteristics
+- **Sensor Position Configuration:**
+  - Interactive map interface for sensor placement
+  - Support for both Cartesian (X, Y, Z in meters) and Geographic (latitude, longitude, elevation) coordinate systems
+  - Drag-and-drop sensor positioning on visual map
+  - Manual coordinate entry with validation
+  - Installation height configuration (meters above ground/floor)
+  - Position accuracy metadata (±meters)
+  - Sensor coverage area visualization
+  - Import/export sensor positions (JSON format)
+- **Acoustic Environment Mapping:**
+  - **Barrier Definition Interface:**
+    - Define solid walls with position, dimensions, and material properties
+    - Define floor-to-ceiling curtains (vinyl or fabric) with acoustic properties
+    - Support for barrier types: concrete wall, drywall, metal panel, vinyl curtain, fabric curtain, glass, custom
+    - Material properties: transmission loss (dB), reflection coefficient
+    - Barrier visualization on map with transparency/opacity based on acoustic properties
+  - **Environment Characteristics:**
+    - Room/space definition with boundaries
+    - Floor type and ceiling height
+    - Acoustic treatment areas (absorptive vs reflective surfaces)
+    - Temperature and humidity (affects sound speed)
+  - **Path Loss Modeling:**
+    - Calculate acoustic path between source and sensors
+    - Account for barriers in signal path
+    - Apply attenuation based on barrier material properties
+    - Multi-path detection and filtering
+- **Event Detection and Correlation:**
+  - Sound onset detection with configurable threshold (e.g., 10 dB above ambient)
+  - Microsecond-precision timestamp capture for TDoA
+  - Event correlation across multiple sensors (same event detected by 3+ sensors)
+  - Event buffering (100-500ms audio before and after onset)
+  - False positive filtering
+- **Triangulation Processing:**
+  - Real-time position calculation using multilateration algorithms
+  - Confidence score calculation (0-100%)
+  - Position refinement using least-squares or Kalman filtering
+  - Historical position tracking for moving sources
+  - Minimum sensor requirement: 3 sensors for 2D, 4 sensors for 3D localization
+- **Result Storage and History:**
+  - Store detected event: timestamp, position (X, Y, Z), confidence, method used
+  - Link contributing sensor measurements to event
+  - Sound characteristics: peak dB, duration, dominant frequency
+  - Event classification (optional): impulse, continuous, periodic
+  - Retention policy for source location data
+
+**Acceptance Criteria:**
+- Sensor positions configurable via interactive map interface
+- Support for minimum 3 sensors for 2D localization, 4+ for 3D
+- TDoA localization accuracy: 2-5 meters for impulse sounds with 4+ sensors
+- RSS localization accuracy: 5-15 meters for continuous sounds
+- Event detection and correlation within 2 seconds of sound onset
+- Acoustic barriers definable with material properties and visualization
+- Position results include confidence scores (0-100%)
+- Barrier effects incorporated into localization calculations
+- Results stored with full event metadata and contributing sensor data
+- Web interface displays sensor positions, barriers, and detected source locations
+- System automatically selects optimal localization method based on sound type
+- Export capabilities for position data and event history
+
+#### F6C: Sound Source Visualization
+**Priority:** P1 (High)
+**Status:** 🚧 PLANNED (v1.3)
+
+**Requirements:**
+- **Interactive Map Display:**
+  - 2D top-down map view of monitored environment
+  - Optional 3D perspective view for multi-level installations
+  - Sensor markers with status indicators (active/inactive)
+  - Sensor labels with device names
+  - Zoom and pan controls
+  - Grid overlay with scale indicators (meters/feet)
+  - Coordinate system display (origin point)
+- **Barrier Visualization:**
+  - Solid walls displayed as thick lines with material indication
+  - Curtains displayed as dashed/semi-transparent lines
+  - Color-coding by material type and acoustic properties
+  - Barrier labels with material and transmission loss values
+  - Toggle visibility of different barrier types
+  - Opacity adjustment based on acoustic transparency
+- **Real-Time Source Markers:**
+  - Animated markers for currently detected sound sources
+  - Color-coded by sound intensity (green < 80 dB, yellow 80-95 dB, red > 95 dB)
+  - Confidence circles/ellipses around estimated positions
+  - Source markers with timestamp and dB level
+  - Fade-out animation for past events
+- **Historical Event Display:**
+  - Timeline slider for event playback
+  - Heatmap overlay showing sound source density over time
+  - Path traces for moving sound sources
+  - Event filtering by time range, intensity, confidence level
+  - Event details panel with full metadata
+- **Acoustic Coverage Visualization:**
+  - Coverage circles for each sensor (estimated detection range)
+  - Overlap areas showing optimal triangulation zones
+  - Dead zones with poor coverage indication
+  - Signal strength gradient display
+
+**Acceptance Criteria:**
+- Interactive map loads within 3 seconds
+- Real-time source markers update within 5 seconds of detection
+- Support for 10 sensors and 50+ barriers on single map
+- Smooth pan and zoom operations (60 fps)
+- Historical events playable with timeline control
+- Heatmap generation for 24-hour periods in < 10 seconds
+- Mobile-responsive map interface
+- Export map view as PNG/PDF
+- Tooltips display full sensor and event information on hover
+- Barrier visualization clearly distinguishes wall types and materials
+
+#### F6D: Public Kiosk Display
+**Priority:** P1 (High)
+**Status:** 🚧 PLANNED (v1.4)
+
+**Requirements:**
+- **Display Configuration:**
+  - Optimized for 1080p monitors (1920x1080 pixels)
+  - Full-screen layout without browser chrome
+  - No keyboard or mouse interaction required
+  - Designed for display systems like Xibo, BrightSign, or similar
+  - Auto-start capability in kiosk mode browsers
+- **Workshop Map Display:**
+  - Large, high-contrast map of the workshop/monitored environment
+  - Occupies majority of screen real estate (70-80% of display)
+  - Clear visual hierarchy with easy-to-read labels at distance
+  - Optimized for viewing from 3-5 meters away
+- **Sensor Information Display:**
+  - Real-time sensor locations marked on map
+  - Current status indicator for each sensor (online/offline, active/inactive)
+  - Live sound level readings (dB) per sensor
+  - Color-coded status based on thresholds:
+    - Green: < 80 dB (normal)
+    - Yellow: 80-95 dB (elevated)
+    - Red: > 95 dB (critical)
+  - Sensor labels with device names
+  - Last update timestamp per sensor
+- **Sound Source Visualization:**
+  - Triangulated sound source positions displayed as pins/markers on map
+  - Animated appearance for new sound sources
+  - Color-coded by intensity (green/yellow/red)
+  - Confidence indicators (circle radius or opacity)
+  - Recent event history (last 10-20 events with fade-out)
+  - Timestamp and dB level for each source
+- **Auto-Refresh and Updates:**
+  - Automatic polling for new data every 5-10 seconds
+  - Smooth transitions for data updates (no jarring refreshes)
+  - Real-time sensor status updates
+  - Live sound source position updates
+  - Connection status indicator (connected/disconnected)
+  - Last successful update timestamp displayed
+- **Layout and Design:**
+  - High-contrast color scheme suitable for various lighting conditions
+  - Large, legible fonts (minimum 18px for body text, 24px+ for headings)
+  - Minimal UI chrome (no unnecessary navigation elements)
+  - Information panels/sidebars with summary statistics
+  - Overall system status indicator (all sensors green, warnings present, etc.)
+  - Optional: Rotating views (map, statistics, event history)
+- **Access and Navigation:**
+  - Separate URL endpoint from main dashboard (e.g., /kiosk or /display)
+  - Direct link available from main dashboard for administrators
+  - No authentication required for view-only access (configurable)
+  - Screen saver mode after inactivity (configurable timeout)
+  - Automatic recovery from network disconnections
+
+**Acceptance Criteria:**
+- Display renders correctly at 1920x1080 resolution
+- No scroll bars visible in full-screen mode
+- Map and text clearly readable from 3-5 meters away
+- Data updates every 5-10 seconds without user intervention
+- Page functions without keyboard or mouse input
+- All sensors visible on map with current status and readings
+- Sound sources appear within 5 seconds of triangulation
+- Browser auto-refresh prevented (uses AJAX/fetch for updates)
+- Page remains stable for 24+ hours continuous operation
+- Graceful handling of network disconnections with reconnection
+- Separate URL accessible via direct link or bookmark
+- Compatible with major kiosk software systems (Xibo, Chrome Kiosk mode, etc.)
+
 ### 5.2 Advanced Features
 
 #### F7: Analytics and Reporting
@@ -553,12 +754,26 @@ The Sound Monitoring System is a distributed network of 10 ESP32-based WiFi-enab
 - **US9:** As a system administrator, I want to see device connection status and last data received timestamp, so that I can identify devices that need attention.
 - **US10:** As a system administrator, I want to calibrate each sensor device by setting dB offset values, so that measurements are accurate compared to a reference standard.
 - **US11:** As a system administrator, I want to view both calibrated and raw (uncalibrated) measurements, so that I can verify calibration accuracy.
+- **US12:** As a system administrator, I want to configure sensor positions on an interactive map, so that the system can triangulate sound source locations.
+- **US13:** As a system administrator, I want to define acoustic barriers (walls and curtains) in my environment, so that triangulation accounts for sound attenuation and reflections.
+
+### Epic 5: Sound Source Localization
+- **US14:** As a security operator, I want to see the location of detected sounds on a map in real-time, so that I can quickly respond to events at specific locations.
+- **US15:** As a facility manager, I want to identify where loud noises originated from, so that I can address the source of the disturbance.
+- **US16:** As an environmental officer, I want to generate heatmaps showing where sounds occur most frequently, so that I can identify problem areas.
+- **US17:** As a data analyst, I want to export sound source location data with timestamps and coordinates, so that I can perform spatial analysis.
+
+### Epic 6: Public Kiosk Display
+- **US18:** As a facility manager, I want to display real-time sound monitoring data on a kiosk monitor in the workshop, so that workers can see current noise levels at a glance.
+- **US19:** As a safety officer, I want the kiosk display to show sensor status and triangulated sound sources on a large map, so that personnel can identify noisy areas visually.
+- **US20:** As a system administrator, I want the kiosk display to update automatically without user interaction, so that it can run unattended for extended periods.
+- **US21:** As a facility manager, I want a separate link to access the kiosk display, so that I can configure it on dedicated display hardware independent of the main dashboard.
 
 ---
 
-## 9. Out of Scope (v1.0)
+## 9. Out of Scope (Future Versions)
 
-The following features are explicitly out of scope for the initial release:
+The following features are explicitly out of scope for current releases:
 
 - Mesh networking (system uses WiFi star topology)
 - More than 10 monitoring devices
@@ -567,9 +782,12 @@ The following features are explicitly out of scope for the initial release:
 - Voice recognition and transcription
 - Battery-powered operation (devices require power supply)
 - Native mobile applications (responsive web application only)
-- Advanced AI/ML models beyond basic frequency analysis
-- Multi-tenant architecture (v1.0 will be single-tenant)
-- Cloud deployment (v1.0 supports on-premise or single cloud instance)
+- Advanced AI/ML pattern recognition beyond threshold-based detection
+- Multi-tenant architecture (system will be single-tenant)
+- Cloud deployment (system supports on-premise or single cloud instance)
+- Automatic barrier detection via acoustic measurement
+- Real-time audio streaming from sensors
+- GPS modules for absolute positioning (using manual coordinate entry instead)
 
 ---
 
@@ -582,6 +800,9 @@ The following features are explicitly out of scope for the initial release:
 - MH-ET LIVE INMP441 I2S Digital Microphone Module (one per ESP32 device)
 - Power supply for each ESP32 device (USB or external)
 - I2S wiring: GPIO 4 (SD), GPIO 5 (SCK), GPIO 6 (WS), 3.3V, GND
+- NTP server access for time synchronization (for TDoA triangulation)
+- Measurement of sensor positions (tape measure, laser distance meter, or floor plan)
+- Knowledge of acoustic barriers in environment (wall locations, curtain positions)
 
 ### Assumptions
 - Users have basic technical knowledge for ESP32 programming and deployment
@@ -589,6 +810,10 @@ The following features are explicitly out of scope for the initial release:
 - Adequate power sources available for all devices (USB or external power)
 - Web server has sufficient storage for 7+ days of data from 10 devices
 - Users have web browser access for monitoring and admin interfaces
+- Users can measure and input accurate sensor positions (±1 meter accuracy)
+- Minimum 3 sensors deployed for 2D triangulation, 4+ for 3D triangulation
+- Acoustic environment is relatively stable (walls and barriers don't move frequently)
+- NTP time synchronization available for TDoA with ±10ms accuracy
 
 ---
 
@@ -603,6 +828,11 @@ The following features are explicitly out of scope for the initial release:
 | Web server overload | Medium | Low | Efficient file I/O operations, data aggregation, file caching |
 | Data loss during WiFi transmission | Medium | Medium | Retry mechanisms, data validation, connection status monitoring |
 | Frequency band configuration errors | Low | Medium | Input validation, configuration preview, test mode |
+| Time synchronization drift affecting TDoA accuracy | High | Medium | Regular NTP sync (hourly), clock drift monitoring, fall back to RSS method if sync poor |
+| Inaccurate sensor position configuration | Medium | High | Position validation, visual confirmation on map, test with known sound sources |
+| Acoustic reflections causing false positions | Medium | High | Multi-path filtering, first-arrival detection, barrier modeling, confidence scoring |
+| Insufficient sensor coverage for triangulation | High | Medium | Coverage visualization, minimum 3-4 sensor requirement, dead zone warnings |
+| Complex barrier geometry reducing accuracy | Medium | Medium | Simplified barrier models, empirical testing, user documentation on limitations |
 
 ### Business Risks
 
@@ -656,8 +886,13 @@ The following features are explicitly out of scope for the initial release:
 - **Month 5:** Enhanced monitoring dashboard with responsive design, historical data visualization, configurable retention
 - **Month 6:** Complete admin interface with mobile-responsive views, testing, performance optimization, production deployment
 
-### Phase 3: Enhancements (Months 7+)
-- **Month 7+:** Advanced features (alerts, analytics, data export), responsive design refinements, user feedback integration, bug fixes
+### Phase 3: Sound Source Triangulation (Months 7-9)
+- **Month 7:** Sensor position configuration interface, coordinate system implementation, map visualization framework
+- **Month 8:** Acoustic barrier definition interface, TDoA time synchronization enhancement, event detection and correlation
+- **Month 9:** Triangulation algorithms (TDoA, RSS, Hybrid), real-time source visualization, testing and calibration
+
+### Phase 4: Advanced Features (Months 10+)
+- **Month 10+:** Alert system enhancements, advanced analytics, data export improvements, responsive design refinements, user feedback integration, bug fixes
 
 ---
 
@@ -727,6 +962,18 @@ The following features are explicitly out of scope for the initial release:
 - **PDM (Pulse Density Modulation):** Modulation format used by INMP441, converted to I2S format
 - **MEMS (Micro-Electro-Mechanical Systems):** Miniature mechanical and electromechanical elements used in the microphone
 - **NTP (Network Time Protocol):** Protocol for synchronizing device clocks over a network
+- **TDoA (Time Difference of Arrival):** Localization technique using time differences when sound reaches different sensors
+- **RSS (Received Signal Strength):** Localization technique using sound intensity (dB level) comparisons across sensors
+- **Triangulation:** Process of determining position by measuring angles or distances from known points
+- **Multilateration:** Mathematical technique for position determination using distance measurements from multiple points
+- **Acoustic Barrier:** Physical obstruction (wall, curtain, partition) that affects sound propagation
+- **Transmission Loss:** Reduction in sound intensity (dB) when passing through a barrier material
+- **Path Loss:** Attenuation of sound intensity over distance and through materials
+- **Sound Onset:** Beginning moment of a sound event, used as reference point for TDoA calculations
+- **Confidence Score:** Numerical indicator (0-100%) of localization result reliability
+- **Cartesian Coordinates:** Position system using X, Y, Z distances from origin point (meters)
+- **Geographic Coordinates:** Position system using latitude, longitude, and elevation
+- **Heatmap:** Visual representation showing spatial density or intensity of events over time
 
 ### B. References
 - IEC 61672: Electroacoustics - Sound level meters

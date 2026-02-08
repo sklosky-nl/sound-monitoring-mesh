@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const DeviceModel = require('../models/Device');
+const MeasurementModel = require('../models/Measurement');
 const logger = require('../utils/logger');
 
 // Register a new device
@@ -53,7 +54,25 @@ router.post('/register', async (req, res) => {
 router.get('/', async (req, res) => {
     try {
         const devices = await DeviceModel.getAllDevices();
-        res.json(devices);
+        
+        // Fetch latest measurement for each device
+        const devicesWithMeasurements = await Promise.all(devices.map(async (device) => {
+            try {
+                const measurements = await MeasurementModel.getLatestMeasurements(device.device_id, 1);
+                return {
+                    ...device,
+                    latest_measurement: measurements.length > 0 ? measurements[0] : null
+                };
+            } catch (err) {
+                logger.warn(`Failed to fetch measurement for ${device.device_id}:`, err.message);
+                return {
+                    ...device,
+                    latest_measurement: null
+                };
+            }
+        }));
+        
+        res.json(devicesWithMeasurements);
     } catch (error) {
         logger.error('Error getting devices:', error);
         res.status(500).json({
@@ -101,6 +120,35 @@ router.put('/:deviceId', async (req, res) => {
         logger.error('Error updating device:', error);
         res.status(500).json({
             error: 'Failed to update device',
+            message: error.message
+        });
+    }
+});
+
+// Update device nickname
+router.patch('/:deviceId/nickname', async (req, res) => {
+    try {
+        const { nickname } = req.body;
+        
+        if (!nickname) {
+            return res.status(400).json({
+                error: 'Nickname is required'
+            });
+        }
+
+        const device = await DeviceModel.updateNickname(req.params.deviceId, nickname);
+
+        if (!device) {
+            return res.status(404).json({
+                error: 'Device not found'
+            });
+        }
+
+        res.json(device);
+    } catch (error) {
+        logger.error('Error updating device nickname:', error);
+        res.status(500).json({
+            error: 'Failed to update device nickname',
             message: error.message
         });
     }

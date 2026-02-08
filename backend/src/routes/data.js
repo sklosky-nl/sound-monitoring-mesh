@@ -10,10 +10,12 @@ const AlertModel = require('../models/Alert');
 const logger = require('../utils/logger');
 
 // Middleware to verify API key
+// Supports both shared API key (SHARED_API_KEY env var) and per-device API keys
 async function verifyApiKey(req, res, next) {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        logger.warn('Missing or invalid authorization header');
         return res.status(401).json({
             error: 'Missing or invalid authorization header'
         });
@@ -23,6 +25,7 @@ async function verifyApiKey(req, res, next) {
     const deviceId = req.body.device_id;
 
     if (!deviceId) {
+        logger.warn('Missing device_id in request body');
         return res.status(400).json({
             error: 'Missing device_id in request body'
         });
@@ -31,6 +34,7 @@ async function verifyApiKey(req, res, next) {
     const isValid = await DeviceModel.verifyApiKey(deviceId, apiKey);
     
     if (!isValid) {
+        logger.warn(`Invalid API key for device ${deviceId}`);
         return res.status(403).json({
             error: 'Invalid API key or device_id'
         });

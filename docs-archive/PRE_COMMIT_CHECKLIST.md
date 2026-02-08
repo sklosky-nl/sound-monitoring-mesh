@@ -5,7 +5,7 @@
 ## Files Excluded from Git
 
 ### 1. WiFi Credentials & Configuration
-- ✅ `firmware/sound-level-sensor/sdkconfig` - Contains WiFi SSID "YOUR_WIFI_SSID" and password
+- ✅ `firmware/sound-level-sensor/sdkconfig` - Contains WiFi SSID and password (gitignored)
 - ✅ Template provided: `sdkconfig.example` with safe defaults
 
 ### 2. Backend Data Directories
@@ -79,7 +79,7 @@ git check-ignore firmware/sound-level-sensor/sdkconfig
 # Should output: firmware/sound-level-sensor/sdkconfig
 
 # Search for any passwords or SSIDs in tracked files
-git grep -i "YOUR_WIFI_SSID\|REDACTED" -- ':!.gitignore' ':!*.md'
+git grep -i "YOUR_WIFI_SSID\|YOUR_WIFI_PASSWORD" -- ':!.gitignore' ':!*.md' ':!CREDENTIALS.local'
 # Should return no results
 
 # Check what would be added

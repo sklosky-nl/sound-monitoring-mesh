@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, initial-scale=1.0">
+    <title>Sound Monitoring - Public Display</title>
+    <link rel="stylesheet" href="css/kiosk.css">
+</head>
+<body>
+    <div class="kiosk-container">
+        <!-- Header -->
+        <header class="kiosk-header">
+            <h1>🔊 Sound Monitoring System</h1>
+            <div class="status-indicator">
+                <span class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Connecting...</span>
+                </span>
+                <span class="last-update" id="lastUpdateTime">--</span>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="kiosk-main">
+            <!-- Workshop Map (Large) -->
+            <div class="map-container">
+                <h2 class="map-title">Workshop Layout</h2>
+                <div class="map-canvas" id="workshopMap">
+                    <!-- Map will be rendered here via JavaScript -->
+                    <svg id="mapSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                        <!-- Grid background -->
+                        <defs>
+                            <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#2a2a2a" stroke-width="0.5"/>
+                            </pattern>
+                        </defs>
+                        <rect width="800" height="600" fill="url(#grid)"/>
+                        
+                        <!-- Map elements will be added dynamically -->
+                        <g id="barriers"></g>
+                        <g id="sensors"></g>
+                        <g id="soundSources"></g>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Sidebar Info Panel -->
+            <aside class="info-panel">
+                <!-- System Status -->
+                <div class="panel-section">
+                    <h3>System Status</h3>
+                    <div class="system-status" id="systemStatus">
+                        <div class="status-item">
+                            <span class="label">Active Sensors:</span>
+                            <span class="value" id="activeSensors">0/0</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="label">Overall Status:</span>
+                            <span class="value status-badge" id="overallStatus">Normal</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sensor List -->
+                <div class="panel-section">
+                    <h3>Sensor Readings</h3>
+                    <div class="sensor-list" id="sensorList">
+                        <!-- Sensor items will be added dynamically -->
+                    </div>
+                </div>
+
+                <!-- Recent Sound Sources -->
+                <div class="panel-section">
+                    <h3>Recent Events</h3>
+                    <div class="events-list" id="eventsList">
+                        <p class="no-events">No recent events</p>
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div class="panel-section">
+                    <h3>Legend</h3>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="legend-icon sensor-icon-green"></span>
+                            <span>&lt; 80 dB (Normal)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-icon sensor-icon-yellow"></span>
+                            <span>80-95 dB (Elevated)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-icon sensor-icon-red"></span>
+                            <span>&gt; 95 dB (Critical)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-icon source-icon"></span>
+                            <span>Sound Source</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Footer -->
+        <footer class="kiosk-footer">
+            <p>Sound Level Mesh System v1.4 | Auto-refresh every 10 seconds</p>
+        </footer>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/kiosk.js"></script>
+</body>
+</html>

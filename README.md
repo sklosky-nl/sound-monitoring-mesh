@@ -1,16 +1,18 @@
 # Sound Level Mesh System
 
-A distributed sound monitoring system consisting of 10 ESP32-C3-based WiFi sensor devices that communicate with a central web server to monitor, analyze, and report sound levels and frequency band measurements.
+A distributed sound monitoring system consisting of ESP32-C3-based WiFi sensor devices that communicate with a central web server to monitor, analyze, and report sound levels and frequency band measurements.
+
+**Current Status:** ✅ **Operational with 9 devices** actively sending real-time data every 5 seconds.
 
 **Hardware Status:** All hardware components have been purchased and are awaiting delivery (January 2026).
 
 ## 📋 Project Status
 
-**Current Phase: ✅ BUILD COMPLETE - Testing in Progress**
+**Current Phase: ✅ BUILD COMPLETE - Production Deployment at Nova Labs**
 
 **All System Code Built (January 30, 2026):**
 
-### ✅ Development Environment #1
+### ✅ Development Environment #1 (MacBook - Testing)
 - ✅ MacBook Development Setup Complete
   - VS Code with Cursor IDE
   - ESP-IDF v6.1-dev-2300 installed and configured
@@ -27,6 +29,19 @@ A distributed sound monitoring system consisting of 10 ESP32-C3-based WiFi senso
   - Backend: http://192.168.68.57:3000
   - Frontend: http://localhost:8080
   - Device MAC: 08:92:72:84:1d:18
+
+### ⏳ Production Environment #2 (Nova Labs - In Progress)
+- 📍 Location: Nova Labs makerspace
+- 📡 WiFi Network: YOUR_WORKSHOP_WIFI (isolated IoT network)
+- 🔒 Network Password: YOUR_WORKSHOP_PASSWORD
+- 💻 Server: Ubuntu 20.04+ (TBD)
+- 📱 Deployment: All 10 ESP32-C3 sensors
+- 🌐 Backend URL: TBD (configure when server ready)
+- 🔑 **Shared API Key**: All devices use same key (configured in firmware and backend)
+  - Example: `YOUR_API_KEY_HERE`
+  - Set in firmware via `CONFIG_API_KEY` (sdkconfig)
+  - Set in backend via `SHARED_API_KEY` in `.env`
+  - Must match exactly for authentication to work
 
 ### ✅ Software Components Built
 - ✅ **ESP32-C3 Firmware** - Complete and tested
@@ -46,9 +61,6 @@ A distributed sound monitoring system consisting of 10 ESP32-C3-based WiFi senso
   - Real-time monitoring, device management
   - Full source code in `frontend/`
 
-**📖 See [BUILD_COMPLETE.md](BUILD_COMPLETE.md) for full build summary**  
-**🚀 See [QUICKSTART.md](QUICKSTART.md) for setup instructions**
-
 ### What's Complete
 - ✅ Product Requirements Document (PRD)
 - ✅ System Architecture Document
@@ -56,35 +68,43 @@ A distributed sound monitoring system consisting of 10 ESP32-C3-based WiFi senso
 - ✅ Technical specifications and design decisions
 - ✅ **Component Pinout Reference** - Verified ESP32-C3 and INMP441 pinouts
 - ✅ **Hardware Delivered and Connected**
-  - ESP32-C3 SuperMini (USB connected to MacBook)
-  - INMP441 I2S Microphone (wired to ESP32-C3)
-  - USB-C cable and power
-- ✅ **Development Environment #1 Configured**
+  - ESP32-C3 SuperMini devices
+  - INMP441 I2S Microphones
+  - USB-C cables and power
+- ✅ **Development Environment Configured**
   - MacBook with all development tools installed
   - ESP-IDF framework ready
-  - Home WiFi network setup
-- ✅ **ESP32-C3 Firmware Built** - Complete, ready to flash
-  - 500+ lines of C code
-  - I2S, FFT, WiFi, HTTP client
+  - WiFi network setup
+- ✅ **ESP32-C3 Firmware** - Complete and tested
+  - I2S audio sampling (16kHz, 32-bit)
+  - FFT analysis (1024 points) with frequency band measurement
+  - WiFi connectivity with HTTP client
+  - Shared API key authentication
+  - Automatic MAC address-based device identification
   - See `firmware/sound-level-sensor/`
-- ✅ **Backend API Server Built** - Complete, ready to run
-  - Node.js/Express with file-based storage
-  - Full REST API implementation
+- ✅ **Backend API Server** - Complete and operational
+  - Node.js/Express with file-based JSON storage
+  - Full REST API with 9 route modules
+  - Shared API key validation
+  - Device, measurement, alert, analytics, triangulation endpoints
   - See `backend/`
-- ✅ **Frontend Dashboard Built** - Complete, ready to serve
-  - Responsive web interface
-  - Real-time monitoring and management
+- ✅ **Frontend Dashboard** - Complete and operational
+  - 7 functional tabs (Dashboard, Devices, Triangulation, History, Alerts, Analytics, Settings)
+  - Real-time device monitoring with auto-refresh
+  - Historical data visualization with Chart.js
+  - Second-precision datetime controls for history and analytics
+  - Device management and configuration
+  - Alert configuration and monitoring
+  - Sound source triangulation with visual map
+  - Public kiosk display mode
   - See `frontend/`
 
-### What's Next - Testing & Deployment
-- ✅ Configure and flash ESP32 firmware
-- ✅ Start backend and frontend servers
-- ✅ Register devices and test hardware (microphone working)
-- ⏳ Complete HTTP communication testing (VPN interference resolved)
-- ⏳ Verify data flow end-to-end
-- ⏳ Calibrate sensors
-- ⏳ System integration testing
-- ⏳ Production deployment (Environment #2 - Remote Ubuntu server)
+### Current System Status
+- ✅ **Multiple devices registered and operational**
+- ✅ **Real-time data collection active**
+- ✅ **All frontend features functional**
+- ✅ **Backend API fully operational**
+- ✅ **End-to-end data flow verified**
 
 ## 🎯 Project Overview
 
@@ -99,42 +119,23 @@ The Sound Level Mesh System is designed to:
 
 ## 📚 Documentation
 
-This repository contains comprehensive documentation for the system:
+### Main Documentation
 
-### [Product Requirements Document (PRD)](sound%20level%20mesh%20system%20PRD.md)
-Complete product requirements including:
-- System goals and objectives
-- Feature specifications
-- User personas and use cases
-- Success criteria and metrics
-- Timeline and milestones
+- **[HARDWARE_AND_FIRMWARE.md](HARDWARE_AND_FIRMWARE.md)** - Complete hardware setup, wiring, firmware building, flashing, and device registration
+- **[DEVELOPER_REFERENCE.md](DEVELOPER_REFERENCE.md)** - Architecture, API documentation, security, and development guidelines
 
-### [Architecture Document](sound%20level%20mesh%20architecture.md)
-Technical architecture covering:
-- System architecture and components
-- Data flow and communication protocols
-- File-based storage design
-- API specifications
-- Deployment architecture (Ubuntu 20.04 + Nginx)
-- Development environment setup (MacBook + Cursor IDE)
+### Archive
 
-### [Hardware Design Document](sound%20level%20mesh%20hardware%20design.md)
-Hardware specifications including:
-- ESP32 microcontroller specifications
-- INMP441 I2S microphone module details
-- Wiring diagrams and pin connections
-- Power supply requirements
-- Enclosure and environmental considerations
-- Assembly and testing procedures
-
-### [Component Pinout Reference](COMPONENT_PINOUT_REFERENCE.md)
+All detailed reference docs and older documentation have been consolidated. See [docs-archive/](docs-archive/) for:
+- Product Requirements Document (PRD)
+- Detailed Architecture Document
+- Hardware Design Specifications
+- Previous build/setup guides
 Complete verified pinout specifications:
 - ESP32-C3 SuperMini complete pinout with physical orientation
-- INMP441 microphone pinout with pin functions
-- Verified I2S wiring configuration (GPIO 4, 5, 6)
-- Software configuration examples
-- Testing and verification procedures
-- Breadboard/protoboard wiring guidance
+### Archive
+
+Older documentation files have been consolidated. See [docs-archive/](docs-archive/) for archived files.
 
 ## 🛠️ Technology Stack
 
@@ -142,20 +143,49 @@ Complete verified pinout specifications:
 - **Microcontroller:** ESP32-C3 Super Mini Development Board (4MB flash) - ✅ **10 units purchased**
 - **Microphone:** MH-ET LIVE INMP441 I2S Digital Microphone Module - ✅ **10 units purchased**
 - **Power:** USB Wall Chargers + USB-C Cables - ✅ **10 chargers, 12 cables purchased**
-- **Quantity:** 10 monitoring devices
-- **Status:** Hardware purchased, awaiting delivery (January 2026)
+- **Deployed:** 9 devices currently operational and sending data
+- **Status:** Hardware delivered and operational (February 2026)
 
 ### Firmware
 - **Framework:** ESP-IDF (Espressif IoT Development Framework)
 - **Development:** MacBook with Cursor IDE
 - **Libraries:** ESP-IDF WiFi, HTTP client, I2S driver, ESP-DSP
+- **Device Identification:** Automatic via MAC address (e.g., `08:92:72:84:1d:18`)
+- **Authentication:** Shared API key across all devices
+
+### Authentication Architecture
+**Shared API Key Approach:**
+- All devices use the **same API key** compiled into firmware
+- Simplifies deployment: one firmware build for all devices
+- Each device uniquely identified by MAC address (e.g., `08:92:72:84:1d:18`)
+- Backend validates shared key + verifies device exists  
+- Suitable for trusted, internal networks only
+- Current deployment: 9 devices using shared key `YOUR_API_KEY_HERE`
+
+**Configuration:**
+- Firmware: `CONFIG_API_KEY` in `sdkconfig`
+- Backend: `SHARED_API_KEY` or `API_KEY` in `.env`
+- **Must match exactly** for authentication
 
 ### Server
-- **OS:** Ubuntu 20.04 LTS
-- **Web Server:** Nginx (reverse proxy and static file serving)
-- **Backend:** Node.js, Python, or Go (TBD)
-- **Frontend:** React, Vue.js, or vanilla JavaScript (TBD)
-- **Storage:** File-based (JSON for config, CSV/JSON for measurements)
+- **Runtime:** Node.js v18+ with Express.js
+- **API:** RESTful architecture with 9 route modules
+- **Storage:** File-based JSON (devices, measurements, alerts, configurations)
+- **Deployment:** Can run on any Node.js environment (development: MacBook, production: Ubuntu/Nginx)
+
+### Frontend
+- **Technology:** Vanilla JavaScript with Chart.js for visualizations
+- **Architecture:** Single-page application with tab-based navigation
+- **Features:**
+  - **Dashboard:** Real-time device monitoring with live statistics
+  - **Devices:** Device registration, management, and configuration
+  - **Triangulation:** Sound source localization with visual 2D map
+  - **History:** Time-series data viewer with second-precision datetime controls
+  - **Alerts:** Alert rule configuration and history viewer
+  - **Analytics:** Statistical analysis and trend visualization
+  - **Settings:** System configuration and data management
+  - **Kiosk Mode:** Public display dashboard (separate page)
+- **Responsive:** Works on desktop and tablet devices
 
 ### Development Environment
 - **Development Machine:** MacBook with VS Code/Cursor IDE
@@ -199,9 +229,13 @@ sound-monitoring-mesh/
 - **Home WiFi** - Network connecting ESP32 to MacBook backend
 
 **Port Configuration:**
-- **Backend API**: Port 3000 (default) - http://localhost:3000
-- **Frontend UI**: Port 8080 (default) - http://localhost:8080
-- **ESP32 connects to**: http://192.168.68.67:3000 (MacBook's WiFi IP)
+- **Server**: Port 3000 (backend serves both API and frontend)
+- **Access URLs**:
+  - Main Dashboard: http://localhost:3000
+  - API Endpoints: http://localhost:3000/api/*
+  - Health Check: http://localhost:3000/health
+  - Kiosk Display: http://localhost:3000/kiosk.html
+- **ESP32 connects to**: http://192.168.68.57:3000 (MacBook's WiFi IP)
 
 **Notes:** 
 - Port 5000 is in use by macOS ControlCenter, so avoid using it.
@@ -209,37 +243,32 @@ sound-monitoring-mesh/
 
 **Quick Start for Development:**
 
-1. **Activate ESP-IDF Environment:**
-   ```bash
-   . $HOME/esp/esp-idf/export.sh
-   ```
-
-2. **Build and Flash ESP32 Firmware:**
-   ```bash
-   cd firmware/
-   idf.py build
-   idf.py -p /dev/tty.usbserial-* flash monitor
-   ```
-
-3. **Run Backend Server:**
+1. **Start Backend Server (serves both API and frontend):**
    ```bash
    cd backend/
-   npm install  # or pip install -r requirements.txt for Python
-   PORT=3000 npm start    # or python app.py (configure to use port 3000)
-   ```
-
-4. **Run Frontend (in another terminal):**
-   ```bash
-   cd frontend/
    npm install
-   PORT=8080 npm start    # Frontend will run on port 8080
+   npm start    # Runs on port 3000
    ```
 
-5. **Access Web Interface:**
-   - Backend API: http://localhost:3000/api/
-   - Frontend: http://localhost:8080
+2. **Access the System:**
+   - Main Dashboard: http://localhost:3000
+   - Kiosk Display: http://localhost:3000/kiosk.html
+   - API Health: http://localhost:3000/health
    
-   **Note:** Port 5000 is in use by macOS ControlCenter (AirPlay), so we use 3000 and 8080.
+   **Note:** Frontend is served automatically by the backend. No separate frontend server needed.
+
+3. **Flash ESP32 Firmware (if needed):**
+   ```bash
+   cd firmware/sound-level-sensor
+   . $HOME/esp/esp-idf/export.sh
+   idf.py build
+   idf.py -p /dev/cu.usbmodem* flash monitor
+   ```
+
+4. **Access Features:**
+   - Main Dashboard: http://localhost:3000
+   - API Docs: See DEVELOPER_REFERENCE.md
+   - Kiosk Display: http://localhost:3000/kiosk.html
 
 ### For Future Production Deployment (Environment #2)
 
@@ -272,7 +301,8 @@ Review the [Product Requirements Document](sound%20level%20mesh%20system%20PRD.m
 
 ## 📊 System Specifications
 
-- **Number of Devices:** 10 ESP32 monitoring nodes
+- **Number of Devices:** 9 ESP32 monitoring nodes (currently operational)
+- **Hardware Capacity:** 10 devices purchased (1 spare/development unit)
 - **Communication:** WiFi (802.11 b/g/n) to central server
 - **Data Storage:** File-based (7-day default retention, configurable)
 - **Measurement Range:** 30-130 dB

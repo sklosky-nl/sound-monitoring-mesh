@@ -3,7 +3,7 @@
  */
 
 const API = {
-    baseUrl: localStorage.getItem('apiUrl') || 'http://192.168.68.57:3000',
+    baseUrl: localStorage.getItem('apiUrl') || 'http://localhost:3000',
 
     setBaseUrl(url) {
         this.baseUrl = url;
@@ -65,6 +65,13 @@ const API = {
         return this.request(`/api/devices/${deviceId}`, {
             method: 'PUT',
             body: JSON.stringify(updates)
+        });
+    },
+
+    async updateDeviceNickname(deviceId, nickname) {
+        return this.request(`/api/devices/${deviceId}/nickname`, {
+            method: 'PATCH',
+            body: JSON.stringify({ nickname })
         });
     },
 
@@ -177,5 +184,99 @@ const API = {
             method: 'PUT',
             body: JSON.stringify({ frequency_bands: bands })
         });
+    },
+
+    // Sensor positions (Triangulation)
+    async getSensorPositions() {
+        return this.request('/api/positions');
+    },
+
+    async getSensorPosition(deviceId) {
+        return this.request(`/api/positions/${deviceId}`);
+    },
+
+    async updateSensorPosition(deviceId, positionData) {
+        return this.request(`/api/positions/${deviceId}`, {
+            method: 'PUT',
+            body: JSON.stringify(positionData)
+        });
+    },
+
+    async batchUpdatePositions(positions) {
+        return this.request('/api/positions/batch', {
+            method: 'POST',
+            body: JSON.stringify({ positions })
+        });
+    },
+
+    // Acoustic barriers (Triangulation)
+    async getBarriers() {
+        return this.request('/api/barriers');
+    },
+
+    async getBarrier(barrierId) {
+        return this.request(`/api/barriers/${barrierId}`);
+    },
+
+    async createBarrier(barrierData) {
+        return this.request('/api/barriers', {
+            method: 'POST',
+            body: JSON.stringify(barrierData)
+        });
+    },
+
+    async updateBarrier(barrierId, updates) {
+        return this.request(`/api/barriers/${barrierId}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+    },
+
+    async deleteBarrier(barrierId) {
+        return this.request(`/api/barriers/${barrierId}`, {
+            method: 'DELETE'
+        });
+    },
+
+    async getMaterialPresets() {
+        return this.request('/api/barriers/materials/presets');
+    },
+
+    // Sound source locations (Triangulation)
+    async getRecentSources(minutes = 5) {
+        return this.request(`/api/sources/recent?minutes=${minutes}`);
+    },
+
+    async getSources(startDate, endDate) {
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        return this.request(`/api/sources?${params.toString()}`);
+    },
+
+    async getSource(locationId) {
+        return this.request(`/api/sources/${locationId}`);
+    },
+
+    async getSourceStats(startDate, endDate) {
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        return this.request(`/api/sources/stats/summary?${params.toString()}`);
+    },
+
+    async triangulateNow(startTimestamp, endTimestamp) {
+        return this.request('/api/sources/triangulate', {
+            method: 'POST',
+            body: JSON.stringify({ startTimestamp, endTimestamp })
+        });
+    },
+
+    async getHeatmapData(startDate, endDate, gridSize = 1.0) {
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        params.append('gridSize', gridSize);
+        return this.request(`/api/sources/heatmap/data?${params.toString()}`);
     }
 };

@@ -2,17 +2,49 @@
 
 Web-based dashboard for monitoring and managing sound level sensors.
 
+**Status:** ✅ Operational - Served automatically by backend on port 3000
+
 ## Features
 
-- Real-time dashboard with live device status
-- Device registration and management
-- Measurement history visualization
-- Device configuration
-- Responsive design (mobile and desktop)
+- **Dashboard:** Real-time device monitoring with live statistics (auto-refresh every 30 seconds)
+- **Devices:** Device registration, management, and configuration
+- **Triangulation:** Sound source localization with visual 2D map
+- **History:** Time-series data viewer with second-precision datetime controls
+- **Alerts:** Alert rule configuration and history viewer
+- **Analytics:** Statistical analysis and trend visualization
+- **Settings:** System configuration and data management
+- **Kiosk Mode:** Public display dashboard (separate page)
+- Responsive design (desktop and tablet)
 
 ## Running the Frontend
 
-### Recommended: Simple Python HTTP Server
+### Recommended: Backend Serves Frontend (Default)
+
+**The backend automatically serves the frontend - no separate server needed!**
+
+```bash
+cd backend
+npm install
+npm start
+```
+
+Then open http://localhost:3000 in your browser.
+
+**Access URLs:**
+- Main Dashboard: http://localhost:3000
+- Kiosk Display: http://localhost:3000/kiosk.html  
+- API Endpoints: http://localhost:3000/api/*
+- Health Check: http://localhost:3000/health
+
+**Current Setup:**
+- Running on MacBook
+- Backend + Frontend on single port (3000)
+- API and static files served together
+- All devices connecting and sending data
+
+### Alternative: Standalone Development Server (Optional)
+
+For frontend-only development without backend:
 
 ```bash
 cd frontend
@@ -21,10 +53,7 @@ python3 -m http.server 8080
 
 Then open http://localhost:8080 in your browser.
 
-**Current Development Setup:**
-- Running on MacBook at http://localhost:8080
-- Backend API at http://192.168.68.57:3000
-- Tested and working with Chrome/Safari
+**Note:** You'll need to configure the backend API URL in Settings tab.
 
 ### Option 2: Node.js http-server
 
@@ -58,6 +87,11 @@ lsof -ti :8080 | xargs kill -9 2>/dev/null
 
 ## Configuration
 
+**Default Configuration (when served by backend):**
+- API URL is automatically set to the same origin (http://localhost:3000)
+- No configuration needed for normal use
+
+**Manual Configuration (if needed):**
 1. Open the frontend in your browser
 2. Go to the "Settings" tab
 3. Set the Backend API URL (e.g., `http://localhost:3000`)
@@ -68,26 +102,42 @@ The setting is saved to browser localStorage and persists across sessions.
 ## Usage
 
 ### Dashboard Tab
-- View all registered devices
-- See real-time sound levels
-- Monitor frequency band measurements
+- View all 9 registered devices
+- See real-time sound levels and frequency bands
+- Monitor device status (active within last minute)
+- View average sound level across all devices
 - Auto-refreshes every 30 seconds
 
 ### Devices Tab
-- Register new ESP32 devices
-- View device details
-- Get API keys for device configuration
-- **Important:** Save the API key when registering - you'll need it for ESP32!
+- View detailed device information
+- Edit device names (nickname) and locations
+- Configure frequency bands
+- Update calibration offsets
+- Delete devices
 
-### History Tab
-- Select a device
-- Choose date range
-- View historical measurements
+### Triangulation Tab
+- Visual 2D map of sensor positions
+- Click-to-place sensor locations
+- Real-time sound source localization
+- Acoustic barrier modeling  
 
-### Settings Tab
-- Configure backend API URL
-- Run manual data cleanup
-- View system information
+### History Tab  
+- Select device from dropdown
+- Choose date/time range with **second precision**
+- View time-series chart of measurements
+- Export data to CSV
+
+### Alerts Tab
+- Create threshold-based alert rules
+- Configure alert conditions and durations
+- View alert history
+- Manage alert notifications
+
+### Analytics Tab
+- Statistical analysis (avg, min, max, std dev)
+- Trend visualization
+- Device comparison
+- Custom date range selection
 
 ## API Integration
 
