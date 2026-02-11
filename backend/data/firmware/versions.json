@@ -1,0 +1,28 @@
+{
+  "versions": [
+    {
+      "version": "1.0.0",
+      "filename": "sound-sensor-1.0.0.bin",
+      "size": 0,
+      "releaseDate": "2026-02-10T00:00:00.000Z",
+      "description": "Initial release with OTA support",
+      "sha256": ""
+    },
+    {
+      "version": "1.1.0",
+      "filename": "sound-sensor-1.1.0.bin",
+      "size": 1062336,
+      "releaseDate": "2026-02-11T02:31:06.441Z",
+      "description": "OTA Testing Update",
+      "sha256": "4ab4c0e7ff92de10707634cdb7f15aa1cad65e889c4113b66c376015421fbace"
+    },
+    {
+      "version": "1.1.1",
+      "filename": "sound-sensor-1.1.1.bin",
+      "size": 1062384,
+      "releaseDate": "2026-02-11T02:43:48.766Z",
+      "description": "OTA URL Fix",
+      "sha256": "4a958f70aadefb117b143e3336be3195b0f0a2c5c32e52c7deb386afafcef253"
+    }
+  ]
+}

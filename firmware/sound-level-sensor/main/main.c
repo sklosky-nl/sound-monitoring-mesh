@@ -25,6 +25,12 @@
 #include "driver/i2s_std.h"
 #include "esp_dsp.h"
 #include "cJSON.h"
+#include "esp_ota_ops.h"
+#include "esp_http_client.h"
+#include "esp_https_ota.h"
+
+// Firmware Version
+#define FIRMWARE_VERSION "1.1.1"
 
 // Configuration
 // Device ID will be set dynamically based on MAC address
@@ -33,6 +39,11 @@ static char device_id[32];  // Global device ID based on MAC address
 #define WIFI_PASS CONFIG_WIFI_PASSWORD
 #define SERVER_URL CONFIG_SERVER_URL
 #define API_KEY CONFIG_API_KEY
+
+// OTA Configuration
+#define OTA_CHECK_INTERVAL_MS (3600000)  // Check for updates every hour
+#define OTA_RECV_TIMEOUT 5000
+#define OTA_BUFFER_SIZE 1024
 
 // I2S Configuration for INMP441
 #define I2S_PORT I2S_NUM_0
@@ -128,6 +139,8 @@ static float calculate_db_level(float* magnitude, int size);
 static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sample_rate);
 static void apply_hamming_window(float* samples, int size);
 static esp_err_t send_measurement_data(float db_level, freq_band_t* bands, int num_bands);
+static void ota_task(void *pvParameters);
+static esp_err_t check_and_perform_ota_update(void);
 
 // WiFi event handler
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
@@ -181,7 +194,8 @@ static void init_wifi(void)
         .sta = {
             .ssid = WIFI_SSID,
             .password = WIFI_PASS,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+            .threshold.authmode = WIFI_AUTH_OPEN,  // Allow any auth mode (WPA2/WPA3)
+            .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,     // Support both WPA3 methods
         },
     };
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -287,10 +301,10 @@ static bool register_device(void)
     ESP_LOGI(TAG, "Registering device with server...");
     
     // Build JSON payload
-    char payload[384];
+    char payload[512];
     snprintf(payload, sizeof(payload),
-             "{\"device_id\":\"%s\",\"mac_address\":\"%s\",\"name\":\"Sound Sensor %s\",\"location\":\"Unknown\",\"api_key\":\"%s\"}",
-             device_id, device_id, device_id, API_KEY);
+             "{\"device_id\":\"%s\",\"mac_address\":\"%s\",\"name\":\"Sound Sensor %s\",\"location\":\"Unknown\",\"api_key\":\"%s\",\"firmware_version\":\"%s\"}",
+             device_id, device_id, device_id, API_KEY, FIRMWARE_VERSION);
     
     // Build URL
     char url[256];
@@ -762,6 +776,7 @@ static esp_err_t send_measurement_data(float db_level, freq_band_t* bands, int n
     cJSON_AddStringToObject(root, "timestamp", timestamp);
     cJSON_AddNumberToObject(root, "db_level", db_level);
     cJSON_AddNumberToObject(root, "db_level_raw", db_level - calibration_offset_db);
+    cJSON_AddStringToObject(root, "firmware_version", FIRMWARE_VERSION);
     
     cJSON *bands_array = cJSON_CreateArray();
     for (int i = 0; i < num_bands; i++) {
@@ -815,9 +830,189 @@ static esp_err_t send_measurement_data(float db_level, freq_band_t* bands, int n
     return err;
 }
 
+/**
+ * OTA Update Functions
+ */
+
+// HTTP event handler for OTA
+static esp_err_t ota_http_event_handler(esp_http_client_event_t *evt)
+{
+    switch (evt->event_id) {
+    case HTTP_EVENT_ERROR:
+        ESP_LOGD(TAG, "HTTP_EVENT_ERROR");
+        break;
+    case HTTP_EVENT_ON_CONNECTED:
+        ESP_LOGD(TAG, "HTTP_EVENT_ON_CONNECTED");
+        break;
+    case HTTP_EVENT_HEADER_SENT:
+        ESP_LOGD(TAG, "HTTP_EVENT_HEADER_SENT");
+        break;
+    case HTTP_EVENT_ON_HEADER:
+        ESP_LOGD(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
+        break;
+    case HTTP_EVENT_ON_DATA:
+        ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+        break;
+    case HTTP_EVENT_ON_FINISH:
+        ESP_LOGD(TAG, "HTTP_EVENT_ON_FINISH");
+        break;
+    case HTTP_EVENT_DISCONNECTED:
+        ESP_LOGD(TAG, "HTTP_EVENT_DISCONNECTED");
+        break;
+    default:
+        break;
+    }
+    return ESP_OK;
+}
+
+// Check for and perform OTA update
+static esp_err_t check_and_perform_ota_update(void)
+{
+    ESP_LOGI(TAG, "Checking for firmware updates...");
+    ESP_LOGI(TAG, "Current firmware version: %s", FIRMWARE_VERSION);
+    
+    // First, check if an update is available
+    char url[256];
+    snprintf(url, sizeof(url), "%s/api/firmware/check?device_id=%s&current_version=%s", 
+             SERVER_URL, device_id, FIRMWARE_VERSION);
+    
+    esp_http_client_config_t check_config = {
+        .url = url,
+        .timeout_ms = 5000,
+    };
+    
+    esp_http_client_handle_t client = esp_http_client_init(&check_config);
+    char auth_header[128];
+    snprintf(auth_header, sizeof(auth_header), "Bearer %s", API_KEY);
+    esp_http_client_set_header(client, "Authorization", auth_header);
+    
+    esp_err_t err = esp_http_client_perform(client);
+    
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to check for updates: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return err;
+    }
+    
+    int status_code = esp_http_client_get_status_code(client);
+    int content_length = esp_http_client_get_content_length(client);
+    
+    ESP_LOGI(TAG, "Update check response: %d, content_length: %d", status_code, content_length);
+    
+    if (status_code == 204) {
+        // No update available
+        ESP_LOGI(TAG, "Firmware is up to date");
+        esp_http_client_cleanup(client);
+        return ESP_OK;
+    } else if (status_code != 200) {
+        ESP_LOGW(TAG, "Unexpected response code: %d", status_code);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
+    
+    // Read the response to get the new version info
+    char response_buffer[512];
+    int read_len = esp_http_client_read(client, response_buffer, sizeof(response_buffer) - 1);
+    esp_http_client_cleanup(client);
+    
+    if (read_len <= 0) {
+        ESP_LOGE(TAG, "Failed to read update info");
+        return ESP_FAIL;
+    }
+    
+    response_buffer[read_len] = 0;
+    ESP_LOGI(TAG, "Update available: %s", response_buffer);
+    
+    // Parse JSON response to get version and download URL
+    cJSON *json = cJSON_Parse(response_buffer);
+    if (json == NULL) {
+        ESP_LOGE(TAG, "Failed to parse update info JSON");
+        return ESP_FAIL;
+    }
+    
+    cJSON *version_item = cJSON_GetObjectItem(json, "version");
+    cJSON *url_item = cJSON_GetObjectItem(json, "url");
+    
+    if (!cJSON_IsString(version_item) || !cJSON_IsString(url_item)) {
+        ESP_LOGE(TAG, "Invalid update info format");
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+    
+    char *new_version = version_item->valuestring;
+    char *download_path = url_item->valuestring;
+    
+    // Construct absolute URL
+    char full_download_url[512];
+    snprintf(full_download_url, sizeof(full_download_url), "%s%s", SERVER_URL, download_path);
+    
+    ESP_LOGI(TAG, "Starting OTA update to version %s from %s", new_version, full_download_url);
+    
+    // Perform the OTA update
+    esp_http_client_config_t ota_config = {
+        .url = full_download_url,
+        .event_handler = ota_http_event_handler,
+        .timeout_ms = 30000,
+        .buffer_size = OTA_BUFFER_SIZE,
+    };
+    
+    esp_https_ota_config_t https_ota_config = {
+        .http_config = &ota_config,
+    };
+    
+    esp_err_t ota_err = esp_https_ota(&https_ota_config);
+    cJSON_Delete(json);
+    
+    if (ota_err == ESP_OK) {
+        ESP_LOGI(TAG, "OTA update successful! Rebooting...");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        esp_restart();
+    } else {
+        ESP_LOGE(TAG, "OTA update failed: %s", esp_err_to_name(ota_err));
+        return ota_err;
+    }
+    
+    return ESP_OK;
+}
+
+// OTA task - checks for updates periodically
+static void ota_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "OTA task started");
+    
+    // Wait 5 minutes before first check to let device stabilize
+    vTaskDelay(pdMS_TO_TICKS(300000));
+    
+    while (1) {
+        // Check if WiFi is connected
+        EventBits_t bits = xEventGroupGetBits(s_wifi_event_group);
+        if (bits & WIFI_CONNECTED_BIT) {
+            check_and_perform_ota_update();
+        } else {
+            ESP_LOGW(TAG, "Skipping OTA check - WiFi not connected");
+        }
+        
+        // Wait for next check interval
+        vTaskDelay(pdMS_TO_TICKS(OTA_CHECK_INTERVAL_MS));
+    }
+}
+
 void app_main(void)
 {
+    // v1.1.1: OTA URL Fix
     ESP_LOGI(TAG, "Sound Level Sensor Starting...");
+    ESP_LOGI(TAG, "Firmware Version: %s", FIRMWARE_VERSION);
+    
+    // Get and log partition information
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_img_states_t ota_state;
+    if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
+        if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
+            ESP_LOGI(TAG, "OTA update pending verification - marking as valid");
+            esp_ota_mark_app_valid_cancel_rollback();
+        }
+    }
+    ESP_LOGI(TAG, "Running partition: %s", running->label);
     
     // Initialize device ID from MAC address
     uint8_t mac[6];
@@ -869,5 +1064,8 @@ void app_main(void)
     // Start audio sampling task
     xTaskCreate(audio_sampling_task, "audio_sampling", 8192, NULL, 5, NULL);
     
-    ESP_LOGI(TAG, "Sound Level Sensor Running");
+    // Start OTA update task (lower priority, runs in background)
+    xTaskCreate(ota_task, "ota_task", 8192, NULL, 3, NULL);
+    
+    ESP_LOGI(TAG, "Sound Level Sensor Running with OTA support");
 }

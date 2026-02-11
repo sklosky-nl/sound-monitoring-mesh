@@ -21,6 +21,8 @@ const positionRoutes = require('./routes/positions');
 const barrierRoutes = require('./routes/barriers');
 const sourceRoutes = require('./routes/sources');
 const triangulationRoutes = require('./routes/triangulation');
+const labelRoutes = require('./routes/labels');
+const firmwareRoutes = require('./routes/firmware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,6 +68,8 @@ app.use('/api/positions', positionRoutes);
 app.use('/api/barriers', barrierRoutes);
 app.use('/api/sources', sourceRoutes);
 app.use('/api/triangulation', triangulationRoutes);
+app.use('/api/labels', labelRoutes);
+app.use('/api/firmware', firmwareRoutes);
 // Legacy device registration endpoint (for backward compatibility)
 // MUST be last to avoid catching other /api/* routes
 app.use('/api', deviceRoutes);

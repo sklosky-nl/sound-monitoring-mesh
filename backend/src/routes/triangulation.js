@@ -7,6 +7,8 @@ const express = require('express');
 const router = express.Router();
 const SourceLocationModel = require('../models/SourceLocation');
 const DeviceModel = require('../models/Device');
+const MeasurementModel = require('../models/Measurement');
+const TriangulationService = require('../services/triangulationService');
 const logger = require('../utils/logger');
 const fs = require('fs').promises;
 const path = require('path');
@@ -124,5 +126,133 @@ async function getBarriers() {
         throw err;
     }
 }
+
+// Locate single sound source using RSS
+router.get('/locate', async (req, res) => {
+    try {
+        const timeWindowMs = parseInt(req.query.time_window_ms) || 30000; // Default 30 seconds
+        const endTime = new Date();
+        const startTime = new Date(endTime.getTime() - timeWindowMs);
+
+        // Get measurements from all devices in time window
+        const devices = await DeviceModel.getAllDevices();
+        const allMeasurements = [];
+
+        for (const device of devices) {
+            const measurements = await MeasurementModel.getMeasurements(
+                device.device_id,
+                startTime.toISOString().split('T')[0],
+                endTime.toISOString().split('T')[0]
+            );
+
+            // Filter to time window and add to collection
+            const filtered = measurements.filter(m => {
+                const timestamp = new Date(m.timestamp);
+                return timestamp >= startTime && timestamp <= endTime;
+            });
+
+            allMeasurements.push(...filtered);
+        }
+
+        if (allMeasurements.length === 0) {
+            return res.json({ 
+                message: 'No measurements found in time window',
+                position: null 
+            });
+        }
+
+        // Calculate single source position using RSS
+        const position = await TriangulationService.calculateRSS(allMeasurements);
+
+        if (!position) {
+            return res.json({
+                message: 'Unable to calculate source position',
+                position: null
+            });
+        }
+
+        const confidence = TriangulationService.calculateConfidence(allMeasurements, position);
+
+        res.json({
+            position,
+            confidence,
+            method: 'rss',
+            measurements_used: allMeasurements.length,
+            time_window_ms: timeWindowMs,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        logger.error('Error locating sound source:', error);
+        res.status(500).json({ error: 'Failed to locate sound source' });
+    }
+});
+
+// Locate multiple simultaneous sound sources
+router.get('/locate-multiple', async (req, res) => {
+    try {
+        const timeWindowSeconds = parseInt(req.query.time_window_seconds) || 30;
+        const minConfidence = parseInt(req.query.min_confidence) || 40;
+        const spatialMergeDistance = parseFloat(req.query.merge_distance) || 3.0;
+        const useFrequencyBands = req.query.frequency_bands !== 'false';
+        const useTemporalClustering = req.query.temporal_clustering !== 'false';
+
+        const endTime = new Date();
+        const startTime = new Date(endTime.getTime() - timeWindowSeconds * 1000);
+
+        // Get measurements from all devices in time window
+        const devices = await DeviceModel.getAllDevices();
+        const allMeasurements = [];
+
+        for (const device of devices) {
+            const measurements = await MeasurementModel.getMeasurements(
+                device.device_id,
+                startTime.toISOString().split('T')[0],
+                endTime.toISOString().split('T')[0]
+            );
+
+            // Filter to time window
+            const filtered = measurements.filter(m => {
+                const timestamp = new Date(m.timestamp);
+                return timestamp >= startTime && timestamp <= endTime;
+            });
+
+            allMeasurements.push(...filtered);
+        }
+
+        if (allMeasurements.length === 0) {
+            return res.json({ 
+                message: 'No measurements found in time window',
+                sources: [] 
+            });
+        }
+
+        // Locate multiple sources
+        const sources = await TriangulationService.locateMultipleSources(allMeasurements, {
+            timeWindowSeconds,
+            minConfidence,
+            spatialMergeDistance,
+            useFrequencyBands,
+            useTemporalClustering
+        });
+
+        res.json({
+            sources,
+            measurements_used: allMeasurements.length,
+            time_window_seconds: timeWindowSeconds,
+            timestamp: new Date().toISOString(),
+            options: {
+                min_confidence: minConfidence,
+                merge_distance: spatialMergeDistance,
+                frequency_bands_enabled: useFrequencyBands,
+                temporal_clustering_enabled: useTemporalClustering
+            }
+        });
+
+    } catch (error) {
+        logger.error('Error locating multiple sources:', error);
+        res.status(500).json({ error: 'Failed to locate multiple sources' });
+    }
+});
 
 module.exports = router;

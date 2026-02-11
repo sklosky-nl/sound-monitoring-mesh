@@ -1,0 +1,62 @@
+[
+  {
+    "id": "1707364800000",
+    "text": "Hallway",
+    "position": {
+      "x": 10,
+      "y": 50
+    },
+    "style": {
+      "fontSize": 18,
+      "fontWeight": "bold",
+      "color": "#ffffff",
+      "backgroundColor": "#ef4444",
+      "padding": 10,
+      "borderRadius": 5,
+      "opacity": 0.9
+    },
+    "visible": true,
+    "created_at": "2026-02-08T01:00:00.000Z",
+    "updated_at": "2026-02-09T02:16:27.013Z"
+  },
+  {
+    "id": "1707364900000",
+    "text": "Bus Stop",
+    "position": {
+      "x": 60,
+      "y": -5
+    },
+    "style": {
+      "fontSize": 16,
+      "fontWeight": "normal",
+      "color": "#ffffff",
+      "backgroundColor": "#3b82f6",
+      "padding": 8,
+      "borderRadius": 4,
+      "opacity": 0.8
+    },
+    "visible": true,
+    "created_at": "2026-02-08T01:01:40.000Z",
+    "updated_at": "2026-02-09T02:16:45.177Z"
+  },
+  {
+    "id": "1707365000000",
+    "text": "Sanding",
+    "position": {
+      "x": -30,
+      "y": -10
+    },
+    "style": {
+      "fontSize": 14,
+      "fontWeight": "normal",
+      "color": "#ffffff",
+      "backgroundColor": "#6b7280",
+      "padding": 6,
+      "borderRadius": 3,
+      "opacity": 0.7
+    },
+    "visible": true,
+    "created_at": "2026-02-08T01:03:20.000Z",
+    "updated_at": "2026-02-09T02:17:35.164Z"
+  }
+]

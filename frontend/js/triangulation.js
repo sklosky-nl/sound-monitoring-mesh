@@ -8,8 +8,10 @@ const TriangulationState = {
     sensors: [],
     barriers: [],
     sources: [],
+    labels: [],
     selectedSensor: null,
     selectedBarrier: null,
+    selectedLabel: null,
     mapCanvas: null,
     mapCtx: null,
     mapScale: 50, // pixels per meter
@@ -34,16 +36,19 @@ async function initTriangulation() {
     await loadBarriers();
     await loadRecentSources();
     await loadMaterialPresets();
+    await loadLabels();
 
     // Set up event listeners
     document.getElementById('configureSensorsBtn').addEventListener('click', openSensorPositionModal);
     document.getElementById('configureBarriersBtn').addEventListener('click', openBarrierModal);
+    document.getElementById('configureLabelsBtn').addEventListener('click', openLabelModal);
     document.getElementById('triangulateNowBtn').addEventListener('click', triggerTriangulation);
     document.getElementById('resetViewBtn').addEventListener('click', resetMapView);
     
     document.getElementById('timeRangeSelect').addEventListener('change', () => loadRecentSources());
     document.getElementById('showSensors').addEventListener('change', () => drawMap());
     document.getElementById('showBarriers').addEventListener('change', () => drawMap());
+    document.getElementById('showLabels').addEventListener('change', () => drawMap());
     document.getElementById('showSources').addEventListener('change', () => drawMap());
     document.getElementById('showHeatmap').addEventListener('change', () => drawMap());
 
@@ -74,6 +79,15 @@ async function loadBarriers() {
         TriangulationState.barriers = await API.getBarriers();
     } catch (error) {
         console.error('Error loading barriers:', error);
+    }
+}
+
+// Load map labels
+async function loadLabels() {
+    try {
+        TriangulationState.labels = await API.getLabels();
+    } catch (error) {
+        console.error('Error loading labels:', error);
     }
 }
 
@@ -147,6 +161,15 @@ function drawMap() {
     if (document.getElementById('showBarriers').checked) {
         for (const barrier of TriangulationState.barriers) {
             drawBarrier(barrier, offsetX, offsetY, scale);
+        }
+    }
+
+    // Draw labels
+    if (document.getElementById('showLabels').checked) {
+        for (const label of TriangulationState.labels) {
+            if (label.visible !== false) {
+                drawLabel(label, offsetX, offsetY, scale);
+            }
         }
     }
 
@@ -282,6 +305,69 @@ function drawSource(source, offsetX, offsetY, scale) {
     ctx.fillText(`${source.sound_characteristics.peak_db.toFixed(0)}dB`, x + 10, y);
     ctx.font = '9px Arial';
     ctx.fillText(`${source.confidence.toFixed(0)}% @ ${time}`, x + 10, y + 12);
+}
+
+// Draw a label on the map
+function drawLabel(label, offsetX, offsetY, scale) {
+    const ctx = TriangulationState.mapCtx;
+    const x = offsetX + label.position.x * scale;
+    const y = offsetY - label.position.y * scale;
+
+    const style = label.style || {};
+    const fontSize = style.fontSize || 14;
+    const fontWeight = style.fontWeight || 'normal';
+    const color = style.color || '#ffffff';
+    const bgColor = style.backgroundColor || '#333333';
+    const padding = style.padding || 8;
+    const borderRadius = style.borderRadius || 4;
+    const opacity = style.opacity || 0.9;
+
+    // Set font for measuring text
+    ctx.font = `${fontWeight} ${fontSize}px Arial`;
+    const textMetrics = ctx.measureText(label.text);
+    const textWidth = textMetrics.width;
+    const textHeight = fontSize;
+
+    // Draw background rectangle with opacity
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = bgColor;
+    
+    // Draw rounded rectangle (with fallback for older browsers)
+    if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(
+            x - padding,
+            y - textHeight - padding,
+            textWidth + padding * 2,
+            textHeight + padding * 2,
+            borderRadius
+        );
+        ctx.fill();
+    } else {
+        // Fallback for browsers without roundRect
+        ctx.fillRect(
+            x - padding,
+            y - textHeight - padding,
+            textWidth + padding * 2,
+            textHeight + padding * 2
+        );
+    }
+
+    // Draw text
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = color;
+    ctx.fillText(label.text, x, y);
+
+    // Add subtle shadow for visibility
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    ctx.fillText(label.text, x, y);
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 }
 
 // Map interaction handlers
@@ -631,3 +717,134 @@ async function triggerTriangulation() {
         btn.textContent = 'Triangulate Now';
     }
 }
+
+// ============ LABEL MANAGEMENT ============
+
+// Open label modal
+async function openLabelModal() {
+    await loadLabels();
+    populateLabelList();
+    document.getElementById('labelModal').style.display = 'block';
+}
+
+// Populate label list
+function populateLabelList() {
+    const container = document.getElementById('labelListItems');
+    container.innerHTML = '';
+
+    for (const label of TriangulationState.labels) {
+        const item = document.createElement('div');
+        item.className = 'barrier-list-item';
+        item.innerHTML = `
+            <strong>${label.text}</strong>
+            <div>Position: ${label.position.x.toFixed(1)}, ${label.position.y.toFixed(1)}</div>
+        `;
+        item.onclick = () => editLabel(label);
+        container.appendChild(item);
+    }
+}
+
+// Edit label
+function editLabel(label) {
+    document.getElementById('labelId').value = label.id;
+    document.getElementById('labelEditorTitle').textContent = 'Edit Label';
+    document.getElementById('labelText').value = label.text;
+    document.getElementById('labelX').value = label.position.x;
+    document.getElementById('labelY').value = label.position.y;
+    
+    const style = label.style || {};
+    document.getElementById('labelFontSize').value = style.fontSize || 14;
+    document.getElementById('labelFontWeight').value = style.fontWeight || 'normal';
+    document.getElementById('labelColor').value = style.color || '#ffffff';
+    document.getElementById('labelBgColor').value = style.backgroundColor || '#333333';
+    document.getElementById('labelPadding').value = style.padding || 8;
+    document.getElementById('labelOpacity').value = style.opacity || 0.9;
+    document.getElementById('labelBorderRadius').value = style.borderRadius || 4;
+    document.getElementById('labelVisible').checked = label.visible !== false;
+    
+    document.getElementById('deleteLabelBtn').style.display = 'inline-block';
+}
+
+// Add new label
+document.getElementById('addLabelBtn')?.addEventListener('click', () => {
+    document.getElementById('labelId').value = '';
+    document.getElementById('labelEditorTitle').textContent = 'New Label';
+    document.getElementById('labelForm').reset();
+    document.getElementById('deleteLabelBtn').style.display = 'none';
+});
+
+// Handle label form submission
+document.getElementById('labelForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const labelId = document.getElementById('labelId').value;
+    const labelData = {
+        text: document.getElementById('labelText').value,
+        position: {
+            x: parseFloat(document.getElementById('labelX').value),
+            y: parseFloat(document.getElementById('labelY').value)
+        },
+        style: {
+            fontSize: parseInt(document.getElementById('labelFontSize').value),
+            fontWeight: document.getElementById('labelFontWeight').value,
+            color: document.getElementById('labelColor').value,
+            backgroundColor: document.getElementById('labelBgColor').value,
+            padding: parseInt(document.getElementById('labelPadding').value),
+            borderRadius: parseInt(document.getElementById('labelBorderRadius').value),
+            opacity: parseFloat(document.getElementById('labelOpacity').value)
+        },
+        visible: document.getElementById('labelVisible').checked
+    };
+
+    try {
+        if (labelId) {
+            await API.updateLabel(labelId, labelData);
+            document.getElementById('labelResult').textContent = 'Label updated successfully!';
+        } else {
+            await API.createLabel(labelData);
+            document.getElementById('labelResult').textContent = 'Label created successfully!';
+        }
+        document.getElementById('labelResult').className = 'result-message success';
+        
+        setTimeout(async () => {
+            await loadLabels();
+            populateLabelList();
+            drawMap();
+        }, 500);
+    } catch (error) {
+        document.getElementById('labelResult').textContent = 'Error: ' + error.message;
+        document.getElementById('labelResult').className = 'result-message error';
+    }
+});
+
+// Delete label
+document.getElementById('deleteLabelBtn')?.addEventListener('click', async () => {
+    const labelId = document.getElementById('labelId').value;
+    if (!labelId) return;
+    
+    if (confirm('Are you sure you want to delete this label?')) {
+        try {
+            await API.deleteLabel(labelId);
+            document.getElementById('labelResult').textContent = 'Label deleted successfully!';
+            document.getElementById('labelResult').className = 'result-message success';
+            
+            setTimeout(async () => {
+                await loadLabels();
+                populateLabelList();
+                document.getElementById('labelForm').reset();
+                drawMap();
+            }, 500);
+        } catch (error) {
+            document.getElementById('labelResult').textContent = 'Error: ' + error.message;
+            document.getElementById('labelResult').className = 'result-message error';
+        }
+    }
+});
+
+// Cancel label editing
+document.getElementById('cancelLabelBtn')?.addEventListener('click', () => {
+    document.getElementById('labelForm').reset();
+    document.getElementById('labelId').value = '';
+    document.getElementById('labelEditorTitle').textContent = 'New Label';
+    document.getElementById('deleteLabelBtn').style.display = 'none';
+});

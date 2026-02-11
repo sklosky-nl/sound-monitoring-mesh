@@ -34,6 +34,7 @@ class DeviceModel {
             registered_at: new Date().toISOString(),
             last_seen: new Date().toISOString(),
             status: 'registered',
+            firmware_version: deviceData.firmware_version || 'unknown',
             calibration_offset_db: 0.0,
             measurement_interval: 5,
             frequency_bands: [
@@ -102,8 +103,12 @@ class DeviceModel {
         return updatedDevice;
     }
 
-    static async updateLastSeen(deviceId) {
-        return this.updateDevice(deviceId, { last_seen: new Date().toISOString() });
+    static async updateLastSeen(deviceId, firmwareVersion = null) {
+        const updates = { last_seen: new Date().toISOString() };
+        if (firmwareVersion) {
+            updates.firmware_version = firmwareVersion;
+        }
+        return this.updateDevice(deviceId, updates);
     }
 
     static async verifyApiKey(deviceId, apiKey) {

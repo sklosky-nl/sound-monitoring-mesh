@@ -242,6 +242,35 @@ const API = {
         return this.request('/api/barriers/materials/presets');
     },
 
+    // Map labels (Triangulation)
+    async getLabels() {
+        return this.request('/api/labels');
+    },
+
+    async getLabel(labelId) {
+        return this.request(`/api/labels/${labelId}`);
+    },
+
+    async createLabel(labelData) {
+        return this.request('/api/labels', {
+            method: 'POST',
+            body: JSON.stringify(labelData)
+        });
+    },
+
+    async updateLabel(labelId, updates) {
+        return this.request(`/api/labels/${labelId}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+    },
+
+    async deleteLabel(labelId) {
+        return this.request(`/api/labels/${labelId}`, {
+            method: 'DELETE'
+        });
+    },
+
     // Sound source locations (Triangulation)
     async getRecentSources(minutes = 5) {
         return this.request(`/api/sources/recent?minutes=${minutes}`);

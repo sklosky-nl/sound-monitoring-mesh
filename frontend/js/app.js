@@ -93,7 +93,7 @@ async function onTabChange(tabName) {
 
 // Modal handling
 function initModals() {
-    const modals = ['registerModal', 'calibrationModal', 'editDeviceModal', 'alertModal', 'sensorPositionModal', 'barrierModal'];
+    const modals = ['registerModal', 'calibrationModal', 'editDeviceModal', 'alertModal', 'sensorPositionModal', 'barrierModal', 'labelModal'];
     const closeButtons = document.querySelectorAll('.close');
 
     // Open buttons
@@ -306,6 +306,7 @@ async function loadDevicesList() {
         
         const lastSeen = new Date(device.last_seen);
         const lastSeenStr = lastSeen.toLocaleString();
+        const firmwareVersion = device.firmware_version || 'unknown';
 
         deviceItem.innerHTML = `
             <div class="device-info">
@@ -313,6 +314,7 @@ async function loadDevicesList() {
                 <p><strong>ID:</strong> ${device.device_id}</p>
                 <p><strong>MAC:</strong> ${device.mac_address}</p>
                 <p><strong>Location:</strong> ${device.location}</p>
+                <p><strong>Firmware:</strong> v${firmwareVersion}</p>
                 <p><strong>Last Seen:</strong> ${lastSeenStr}</p>
                 <p><strong>Calibration:</strong> ${device.calibration_offset_db} dB</p>
             </div>

@@ -1,6 +1,7 @@
 /**
  * Triangulation Service
- * Implements Hybrid TDoA + RSS sound source localization
+ * Implements RSS (Received Signal Strength) sound source localization
+ * Uses continuous measurement data to estimate source positions based on dB levels
  */
 
 const DeviceModel = require('../models/Device');
@@ -9,128 +10,30 @@ const AcousticBarrierModel = require('../models/AcousticBarrier');
 const SourceLocationModel = require('../models/SourceLocation');
 const logger = require('../utils/logger');
 
-const SOUND_SPEED = 343.0; // meters per second at 20°C
-const EVENT_CORRELATION_WINDOW_MS = 100; // milliseconds
 const MIN_SENSORS_FOR_2D = 3;
 const MIN_SENSORS_FOR_3D = 4;
 
 class TriangulationService {
     /**
-     * Correlate events from multiple sensors within time window
-     */
-    static async correlateEvents(events, windowMs = EVENT_CORRELATION_WINDOW_MS) {
-        if (events.length < MIN_SENSORS_FOR_2D) {
-            return [];
-        }
-
-        // Sort events by onset timestamp
-        const sortedEvents = events.sort((a, b) => a.onset_timestamp_us - b.onset_timestamp_us);
-
-        const correlatedGroups = [];
-        const used = new Set();
-
-        for (let i = 0; i < sortedEvents.length; i++) {
-            if (used.has(i)) continue;
-
-            const reference = sortedEvents[i];
-            const group = [reference];
-            used.add(i);
-
-            // Find events within time window
-            for (let j = i + 1; j < sortedEvents.length; j++) {
-                if (used.has(j)) continue;
-
-                const candidate = sortedEvents[j];
-                const timeDiffUs = candidate.onset_timestamp_us - reference.onset_timestamp_us;
-                const timeDiffMs = timeDiffUs / 1000.0;
-
-                if (timeDiffMs <= windowMs) {
-                    group.push(candidate);
-                    used.add(j);
-                } else {
-                    break; // Events are sorted, no need to continue
-                }
-            }
-
-            if (group.length >= MIN_SENSORS_FOR_2D) {
-                correlatedGroups.push(group);
-            }
-        }
-
-        logger.info(`Event correlation: ${events.length} events -> ${correlatedGroups.length} groups`);
-        return correlatedGroups;
-    }
-
-    /**
-     * Time Difference of Arrival (TDoA) localization
-     */
-    static async calculateTDoA(events) {
-        if (events.length < MIN_SENSORS_FOR_2D) {
-            return null;
-        }
-
-        // Get sensor positions
-        const sensorPositions = [];
-        for (const event of events) {
-            const device = await DeviceModel.getDevice(event.device_id);
-            if (device && device.position) {
-                sensorPositions.push({
-                    device_id: event.device_id,
-                    x: device.position.x,
-                    y: device.position.y,
-                    z: device.position.z,
-                    onset_us: event.onset_timestamp_us
-                });
-            }
-        }
-
-        if (sensorPositions.length < MIN_SENSORS_FOR_2D) {
-            logger.warn('Insufficient sensor positions for TDoA');
-            return null;
-        }
-
-        // Use first sensor as reference (earliest detection)
-        const reference = sensorPositions[0];
-        
-        // Calculate time differences and distance differences
-        const measurements = [];
-        for (let i = 1; i < sensorPositions.length; i++) {
-            const sensor = sensorPositions[i];
-            const timeDiffUs = sensor.onset_us - reference.onset_us;
-            const timeDiffS = timeDiffUs / 1000000.0;
-            const distanceDiff = SOUND_SPEED * timeDiffS;
-
-            measurements.push({
-                sensor,
-                distanceDiff
-            });
-        }
-
-        // Solve using multilateration (iterative least squares)
-        const position = this.solveMultilateration(reference, measurements);
-
-        return position;
-    }
-
-    /**
      * Received Signal Strength (RSS) localization
+     * Uses continuous measurement dB levels to estimate source position
      */
-    static async calculateRSS(events) {
-        if (events.length < MIN_SENSORS_FOR_2D) {
+    static async calculateRSS(measurements) {
+        if (measurements.length < MIN_SENSORS_FOR_2D) {
             return null;
         }
 
         // Get sensor positions and dB levels
         const sensorData = [];
-        for (const event of events) {
-            const device = await DeviceModel.getDevice(event.device_id);
+        for (const measurement of measurements) {
+            const device = await DeviceModel.getDevice(measurement.device_id);
             if (device && device.position) {
                 sensorData.push({
-                    device_id: event.device_id,
+                    device_id: measurement.device_id,
                     x: device.position.x,
                     y: device.position.y,
                     z: device.position.z,
-                    db: event.peak_amplitude_db || event.db_level
+                    db: measurement.db_level
                 });
             }
         }
@@ -200,123 +103,29 @@ class TriangulationService {
     }
 
     /**
-     * Hybrid TDoA + RSS localization
-     */
-    static async calculateHybrid(events) {
-        const tdoaPosition = await this.calculateTDoA(events);
-        const rssPosition = await this.calculateRSS(events);
-
-        if (!tdoaPosition && !rssPosition) {
-            return null;
-        }
-
-        if (!tdoaPosition) {
-            return { position: rssPosition, method: 'rss', alpha: 0 };
-        }
-
-        if (!rssPosition) {
-            return { position: tdoaPosition, method: 'tdoa', alpha: 1 };
-        }
-
-        // Determine sound type: impulse or continuous
-        const avgDuration = events.reduce((sum, e) => sum + (e.event_duration_ms || 0), 0) / events.length;
-        const isImpulse = avgDuration < 50; // milliseconds
-
-        // Weight TDoA higher for impulse sounds, RSS for continuous
-        const alpha = isImpulse ? 0.75 : 0.25;
-
-        // Combine positions: P = alpha * TDoA + (1-alpha) * RSS
-        const hybridPosition = {
-            x: alpha * tdoaPosition.x + (1 - alpha) * rssPosition.x,
-            y: alpha * tdoaPosition.y + (1 - alpha) * rssPosition.y,
-            z: alpha * (tdoaPosition.z || 0) + (1 - alpha) * (rssPosition.z || 0)
-        };
-
-        return {
-            position: hybridPosition,
-            method: 'hybrid',
-            alpha,
-            tdoa_position: tdoaPosition,
-            rss_position: rssPosition
-        };
-    }
-
-    /**
      * Calculate confidence score for localization result
      */
-    static calculateConfidence(events, position) {
+    static calculateConfidence(measurements, position) {
         let confidence = 0;
 
         // Factor 1: Number of sensors (more is better)
-        const sensorCount = events.length;
-        const sensorScore = Math.min(sensorCount / 6, 1.0) * 30; // up to 30%
+        const sensorCount = measurements.length;
+        const sensorScore = Math.min(sensorCount / 6, 1.0) * 40; // up to 40%
         confidence += sensorScore;
 
         // Factor 2: Signal strength (higher is better)
-        const avgDb = events.reduce((sum, e) => sum + (e.peak_amplitude_db || e.db_level), 0) / events.length;
+        const avgDb = measurements.reduce((sum, m) => sum + m.db_level, 0) / measurements.length;
         const dbScore = Math.min((avgDb - 60) / 40, 1.0) * 30; // 60-100dB -> 0-30%
         confidence += Math.max(0, dbScore);
 
-        // Factor 3: Time sync quality (lower variance is better)
-        if (events.length > 2) {
-            const onsetTimes = events.map(e => e.onset_timestamp_us);
-            const mean = onsetTimes.reduce((a, b) => a + b) / onsetTimes.length;
-            const variance = onsetTimes.reduce((sum, t) => sum + Math.pow(t - mean, 2), 0) / onsetTimes.length;
-            const stdDev = Math.sqrt(variance);
-            const syncScore = Math.max(0, 1 - stdDev / 10000) * 20; // up to 20%
-            confidence += syncScore;
-        }
-
-        // Factor 4: Position validity (within reasonable bounds)
+        // Factor 3: Position validity (within reasonable bounds)
         if (position) {
             const isValid = !isNaN(position.x) && !isNaN(position.y) && 
                            Math.abs(position.x) < 1000 && Math.abs(position.y) < 1000;
-            confidence += isValid ? 20 : 0;
+            confidence += isValid ? 30 : 0;
         }
 
         return Math.min(Math.max(confidence, 0), 100);
-    }
-
-    /**
-     * Process event group and generate source location
-     */
-    static async processEventGroup(events) {
-        try {
-            const result = await this.calculateHybrid(events);
-            
-            if (!result || !result.position) {
-                logger.warn('Triangulation failed for event group');
-                return null;
-            }
-
-            const confidence = this.calculateConfidence(events, result.position);
-
-            const sourceLocation = {
-                timestamp: events[0].timestamp,
-                position: result.position,
-                confidence,
-                localization_method: result.method,
-                contributing_sensors: events.map(e => e.device_id),
-                sound_characteristics: {
-                    peak_db: Math.max(...events.map(e => e.peak_amplitude_db || e.db_level)),
-                    duration_ms: events[0].event_duration_ms || 0,
-                    is_impulse: (events[0].event_duration_ms || 0) < 50
-                },
-                triangulation_details: {
-                    tdoa_position: result.tdoa_position,
-                    rss_position: result.rss_position,
-                    hybrid_weight_alpha: result.alpha,
-                    barriers_considered: []
-                }
-            };
-
-            const stored = await SourceLocationModel.storeLocation(sourceLocation);
-            return stored;
-
-        } catch (error) {
-            logger.error('Error processing event group:', error);
-            return null;
-        }
     }
 
     /**
@@ -442,6 +251,427 @@ class TriangulationService {
         const y = s1.y + xPos * ey + yPos * exy;
 
         return { x, y, z: s1.z };
+    }
+
+    /**
+     * Multi-source localization using frequency-band separation and temporal clustering
+     * Combines multiple approaches to detect simultaneous sound sources
+     */
+    static async locateMultipleSources(measurements, options = {}) {
+        const {
+            timeWindowSeconds = 30,
+            minConfidence = 40,
+            spatialMergeDistance = 3.0, // meters
+            useFrequencyBands = true,
+            useTemporalClustering = true
+        } = options;
+
+        if (measurements.length < MIN_SENSORS_FOR_2D) {
+            return [];
+        }
+
+        const sources = [];
+
+        // Approach 1: Frequency-band separation
+        if (useFrequencyBands) {
+            const bandSources = await this.locateSourcesByFrequencyBand(measurements);
+            sources.push(...bandSources);
+        }
+
+        // Approach 2: Temporal clustering
+        if (useTemporalClustering) {
+            const clusteredSources = await this.locateSourcesByTemporalClustering(measurements, timeWindowSeconds);
+            sources.push(...clusteredSources);
+        }
+
+        // If no specialized methods found sources, use basic RSS
+        if (sources.length === 0) {
+            const basicPosition = await this.calculateRSS(measurements);
+            if (basicPosition) {
+                sources.push({
+                    position: basicPosition,
+                    confidence: this.calculateConfidence(measurements, basicPosition),
+                    method: 'rss',
+                    frequency_profile: this.getFrequencyProfile(measurements),
+                    source_type: 'unknown',
+                    characteristics: {
+                        avg_db: measurements.reduce((sum, m) => sum + m.db_level, 0) / measurements.length,
+                        sensor_count: measurements.length
+                    }
+                });
+            }
+        }
+
+        // Merge spatially similar sources
+        const mergedSources = this.mergeSimilarSources(sources, spatialMergeDistance);
+
+        // Filter by confidence
+        const filteredSources = mergedSources.filter(s => s.confidence >= minConfidence);
+
+        // Sort by confidence (highest first)
+        filteredSources.sort((a, b) => b.confidence - a.confidence);
+
+        return filteredSources;
+    }
+
+    /**
+     * Locate sources using frequency-band separation
+     * Different sources often have distinct spectral signatures
+     */
+    static async locateSourcesByFrequencyBand(measurements) {
+        const sources = [];
+        const bandNames = ['low', 'mid', 'high'];
+        
+        // Run RSS on each frequency band independently
+        for (let bandIndex = 0; bandIndex < 3; bandIndex++) {
+            const bandMeasurements = measurements.map(m => {
+                if (!m.frequency_bands || !m.frequency_bands[bandIndex]) {
+                    return null;
+                }
+                
+                return {
+                    ...m,
+                    db_level: m.frequency_bands[bandIndex].level
+                };
+            }).filter(m => m !== null && m.db_level > 40); // Only consider bands with significant energy
+
+            if (bandMeasurements.length < MIN_SENSORS_FOR_2D) {
+                continue;
+            }
+
+            const position = await this.calculateRSS(bandMeasurements);
+            if (position) {
+                const confidence = this.calculateConfidence(bandMeasurements, position);
+                const avgDb = bandMeasurements.reduce((sum, m) => sum + m.db_level, 0) / bandMeasurements.length;
+                
+                // Only include if this band has significant energy
+                if (avgDb > 50 && confidence > 30) {
+                    sources.push({
+                        position,
+                        confidence,
+                        method: `rss_band_${bandIndex + 1}`,
+                        frequency_band: bandIndex + 1,
+                        band_name: bandNames[bandIndex],
+                        frequency_range: this.getFrequencyRange(bandIndex),
+                        source_type: this.classifySourceByBand(bandIndex, avgDb),
+                        characteristics: {
+                            avg_db: avgDb,
+                            sensor_count: bandMeasurements.length,
+                            dominant_frequency: bandNames[bandIndex]
+                        }
+                    });
+                }
+            }
+        }
+
+        return sources;
+    }
+
+    /**
+     * Locate sources using temporal clustering
+     * Identifies patterns in measurement variations over time
+     */
+    static async locateSourcesByTemporalClustering(measurements, timeWindowSeconds) {
+        const sources = [];
+        
+        // Group measurements by time windows (e.g., every 5 seconds)
+        const windowSizeMs = 5000;
+        const measurementGroups = this.groupMeasurementsByTime(measurements, windowSizeMs);
+
+        if (measurementGroups.length < 3) {
+            return sources; // Need multiple time samples for clustering
+        }
+
+        // For each device, analyze temporal patterns
+        const devicePatterns = new Map();
+        
+        for (const group of measurementGroups) {
+            for (const measurement of group) {
+                if (!devicePatterns.has(measurement.device_id)) {
+                    devicePatterns.set(measurement.device_id, []);
+                }
+                devicePatterns.get(measurement.device_id).push(measurement.db_level);
+            }
+        }
+
+        // Look for spatial patterns that indicate multiple sources
+        // If some sensors show consistent high readings while others don't,
+        // it suggests localized sources
+        const spatialVariance = this.analyzeSpatialVariance(devicePatterns);
+        
+        if (spatialVariance.hasMultipleSources) {
+            // Split measurements into clusters based on spatial patterns
+            const clusters = await this.clusterMeasurementsBySpatialPattern(measurements);
+            
+            for (const cluster of clusters) {
+                if (cluster.length >= MIN_SENSORS_FOR_2D) {
+                    const position = await this.calculateRSS(cluster);
+                    if (position) {
+                        sources.push({
+                            position,
+                            confidence: this.calculateConfidence(cluster, position),
+                            method: 'rss_temporal_cluster',
+                            source_type: 'clustered',
+                            characteristics: {
+                                avg_db: cluster.reduce((sum, m) => sum + m.db_level, 0) / cluster.length,
+                                sensor_count: cluster.length,
+                                temporal_consistency: spatialVariance.consistency
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        return sources;
+    }
+
+    /**
+     * Group measurements by time windows
+     */
+    static groupMeasurementsByTime(measurements, windowSizeMs) {
+        if (measurements.length === 0) return [];
+
+        const sorted = [...measurements].sort((a, b) => 
+            new Date(a.timestamp) - new Date(b.timestamp)
+        );
+
+        const groups = [];
+        let currentGroup = [];
+        let windowStart = new Date(sorted[0].timestamp);
+
+        for (const measurement of sorted) {
+            const timestamp = new Date(measurement.timestamp);
+            if (timestamp - windowStart > windowSizeMs) {
+                if (currentGroup.length > 0) {
+                    groups.push(currentGroup);
+                }
+                currentGroup = [measurement];
+                windowStart = timestamp;
+            } else {
+                currentGroup.push(measurement);
+            }
+        }
+
+        if (currentGroup.length > 0) {
+            groups.push(currentGroup);
+        }
+
+        return groups;
+    }
+
+    /**
+     * Analyze spatial variance to detect multiple sources
+     */
+    static analyzeSpatialVariance(devicePatterns) {
+        const devices = Array.from(devicePatterns.keys());
+        
+        if (devices.length < 3) {
+            return { hasMultipleSources: false, consistency: 0 };
+        }
+
+        // Calculate coefficient of variation for each device
+        const cvs = [];
+        for (const [deviceId, readings] of devicePatterns) {
+            const mean = readings.reduce((a, b) => a + b, 0) / readings.length;
+            const variance = readings.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / readings.length;
+            const stdDev = Math.sqrt(variance);
+            const cv = stdDev / mean;
+            cvs.push(cv);
+        }
+
+        // High variance across some devices but not others suggests multiple sources
+        const avgCv = cvs.reduce((a, b) => a + b, 0) / cvs.length;
+        const maxCv = Math.max(...cvs);
+        const minCv = Math.min(...cvs);
+        
+        const hasMultipleSources = (maxCv - minCv) > 0.3 && avgCv > 0.2;
+        const consistency = 1 - avgCv; // Higher consistency = lower variation
+
+        return { hasMultipleSources, consistency };
+    }
+
+    /**
+     * Cluster measurements by spatial pattern
+     */
+    static async clusterMeasurementsBySpatialPattern(measurements) {
+        // Simple k-means-like clustering based on dB levels
+        // Group measurements that have similar spatial patterns
+        
+        const k = 2; // Assume 2 sources for now
+        const clusters = [];
+        
+        // Initialize clusters with highest and lowest dB measurements
+        const sorted = [...measurements].sort((a, b) => b.db_level - a.db_level);
+        const cluster1 = [sorted[0]];
+        const cluster2 = [sorted[sorted.length - 1]];
+        
+        // Assign remaining measurements to nearest cluster
+        for (let i = 1; i < sorted.length - 1; i++) {
+            const measurement = sorted[i];
+            const dist1 = Math.abs(measurement.db_level - cluster1[0].db_level);
+            const dist2 = Math.abs(measurement.db_level - cluster2[0].db_level);
+            
+            if (dist1 < dist2) {
+                cluster1.push(measurement);
+            } else {
+                cluster2.push(measurement);
+            }
+        }
+        
+        if (cluster1.length >= MIN_SENSORS_FOR_2D) clusters.push(cluster1);
+        if (cluster2.length >= MIN_SENSORS_FOR_2D) clusters.push(cluster2);
+        
+        return clusters;
+    }
+
+    /**
+     * Merge spatially similar sources
+     */
+    static mergeSimilarSources(sources, mergeDistance) {
+        if (sources.length <= 1) return sources;
+
+        const merged = [];
+        const used = new Set();
+
+        for (let i = 0; i < sources.length; i++) {
+            if (used.has(i)) continue;
+
+            const source = sources[i];
+            const similar = [source];
+            used.add(i);
+
+            // Find similar sources
+            for (let j = i + 1; j < sources.length; j++) {
+                if (used.has(j)) continue;
+
+                const other = sources[j];
+                const distance = Math.sqrt(
+                    Math.pow(source.position.x - other.position.x, 2) +
+                    Math.pow(source.position.y - other.position.y, 2)
+                );
+
+                if (distance < mergeDistance) {
+                    similar.push(other);
+                    used.add(j);
+                }
+            }
+
+            // Merge similar sources (weighted average by confidence)
+            if (similar.length === 1) {
+                merged.push(source);
+            } else {
+                const totalConfidence = similar.reduce((sum, s) => sum + s.confidence, 0);
+                const mergedPosition = {
+                    x: similar.reduce((sum, s) => sum + s.position.x * s.confidence, 0) / totalConfidence,
+                    y: similar.reduce((sum, s) => sum + s.position.y * s.confidence, 0) / totalConfidence,
+                    z: similar.reduce((sum, s) => sum + (s.position.z || 0) * s.confidence, 0) / totalConfidence
+                };
+
+                const methods = similar.map(s => s.method).join('+');
+                const avgConfidence = totalConfidence / similar.length;
+
+                merged.push({
+                    position: mergedPosition,
+                    confidence: Math.min(avgConfidence * 1.2, 100), // Boost confidence for multi-method agreement
+                    method: methods,
+                    source_type: similar[0].source_type,
+                    merged_from: similar.length,
+                    characteristics: {
+                        ...similar[0].characteristics,
+                        agreement_count: similar.length
+                    }
+                });
+            }
+        }
+
+        return merged;
+    }
+
+    /**
+     * Get frequency profile from measurements
+     */
+    static getFrequencyProfile(measurements) {
+        if (!measurements[0] || !measurements[0].frequency_bands) {
+            return null;
+        }
+
+        const avgBands = [0, 0, 0];
+        let count = 0;
+
+        for (const m of measurements) {
+            if (m.frequency_bands && m.frequency_bands.length >= 3) {
+                avgBands[0] += m.frequency_bands[0].level;
+                avgBands[1] += m.frequency_bands[1].level;
+                avgBands[2] += m.frequency_bands[2].level;
+                count++;
+            }
+        }
+
+        if (count === 0) return null;
+
+        return {
+            low: avgBands[0] / count,
+            mid: avgBands[1] / count,
+            high: avgBands[2] / count
+        };
+    }
+
+    /**
+     * Get frequency range for band index
+     */
+    static getFrequencyRange(bandIndex) {
+        const ranges = [
+            { start: 20, end: 200 },
+            { start: 200, end: 2000 },
+            { start: 2000, end: 8000 }
+        ];
+        return ranges[bandIndex] || null;
+    }
+
+    /**
+     * Classify source type by frequency band and level
+     */
+    static classifySourceByBand(bandIndex, avgDb) {
+        const classifications = [
+            {
+                band: 0,
+                types: [
+                    { minDb: 70, type: 'heavy_machinery' },
+                    { minDb: 60, type: 'hvac_system' },
+                    { minDb: 50, type: 'ambient_low_frequency' }
+                ]
+            },
+            {
+                band: 1,
+                types: [
+                    { minDb: 80, type: 'power_tool' },
+                    { minDb: 70, type: 'machinery' },
+                    { minDb: 60, type: 'voices_conversation' },
+                    { minDb: 50, type: 'ambient_mid_frequency' }
+                ]
+            },
+            {
+                band: 2,
+                types: [
+                    { minDb: 80, type: 'metal_work_cutting' },
+                    { minDb: 70, type: 'compressed_air' },
+                    { minDb: 60, type: 'electronic_equipment' },
+                    { minDb: 50, type: 'ambient_high_frequency' }
+                ]
+            }
+        ];
+
+        const bandClassifications = classifications[bandIndex];
+        if (!bandClassifications) return 'unknown';
+
+        for (const classification of bandClassifications.types) {
+            if (avgDb >= classification.minDb) {
+                return classification.type;
+            }
+        }
+
+        return 'unknown';
     }
 }
 

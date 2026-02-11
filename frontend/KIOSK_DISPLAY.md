@@ -7,10 +7,13 @@ The kiosk display is a full-screen, auto-refreshing webpage designed for public 
 ## Features
 
 - **Large Workshop Map**: Visual representation of sensor locations and sound sources
+- **Custom Map Labels**: Annotate zones, equipment, and areas with styled text labels
 - **Real-time Sensor Readings**: Live dB levels and status for all sensors
 - **Sound Source Visualization**: Triangulated sound sources shown on map
+- **Acoustic Barriers**: Visual representation of walls and obstacles
 - **Color-coded Status**: Green (< 80 dB), Yellow (80-95 dB), Red (> 95 dB)
 - **Auto-refresh**: Updates every 10 seconds automatically
+- **Auto-scaling Map**: Dynamically adjusts to fit all sensors in view
 - **Recent Events**: List of recent sound source detections
 - **No User Interaction Required**: Perfect for unattended displays
 

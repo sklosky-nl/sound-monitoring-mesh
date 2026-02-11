@@ -21,7 +21,9 @@ Node.js backend API server for the Sound Level Mesh System.
 3. **Configuration** - Frequency bands, calibration, device settings
 4. **Alerts** - Alert rules, threshold monitoring, notification system
 5. **Analytics** - Statistical analysis, trends, aggregations
-6. **Triangulation** - Sound source localization from multiple sensors
+6. **Triangulation** - Sound source localization using continuous RSS (Received Signal Strength) measurements
+   - Single-source localization using basic RSS
+   - Multi-source detection using frequency-band separation and temporal clustering
 7. **Positions** - Sensor spatial positioning and mapping
 8. **Sources** - Sound source tracking and management
 9. **Barriers** - Acoustic obstacle modeling for triangulation
@@ -162,7 +164,10 @@ The server will start on port 3000 (configurable via `PORT` env variable).
 - `GET /api/analytics/stats` - Get statistics
 
 **Triangulation:**
-- `GET /api/triangulation/locate` - Locate sound source
+- `GET /api/triangulation/locate` - Locate single sound source using RSS
+- `GET /api/triangulation/locate-multiple` - Locate multiple simultaneous sources
+- `GET /api/triangulation/sensors` - Get sensor positions
+- `GET /api/triangulation/sources/recent` - Get recent sound sources
 
 **Positions & Barriers:**
 - `GET /api/positions/sensors` - Get sensor positions

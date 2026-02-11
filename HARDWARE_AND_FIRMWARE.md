@@ -10,8 +10,9 @@ Complete guide for hardware setup, wiring, firmware building, flashing, and devi
 3. [Firmware Building](#firmware-building)
 4. [Flashing Multiple Devices](#flashing-multiple-devices)
 5. [Device Registration](#device-registration)
-6. [Firmware Features](#firmware-features)
-7. [Troubleshooting](#troubleshooting)
+6. [OTA Firmware Updates](#ota-firmware-updates)
+7. [Firmware Features](#firmware-features)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -21,7 +22,39 @@ Complete guide for hardware setup, wiring, firmware building, flashing, and devi
 - **1x ESP32-C3 SuperMini** - RISC-V microcontroller with WiFi
 - **1x INMP441** - I2S digital MEMS microphone module  
 - **1x USB-C cable** - For programming and power
+- **Header pins** - For soldering to PCBs
 - **Jumper wires** - For connecting microphone to ESP32
+- **1x Microphone foam windscreen** - Enclosure/dust protection (15-30mm diameter)
+- **1x Zip tie** - To secure foam around USB cable
+
+### Example Components Used (AliExpress Links)
+
+1. **ESP32-C3 SuperMini** - [AliExpress Link](https://www.aliexpress.us/item/3256807018729495.html)
+2. **INMP441 I2S Microphone Module** - [AliExpress Link](https://www.aliexpress.us/item/3256809687889895.html)
+3. **Header Pins** - [AliExpress Link](https://www.aliexpress.us/item/3256807581676863.html)
+4. **USB-C Cables/Power** - [AliExpress Link](https://www.aliexpress.us/item/3256809620417878.html)
+5. **Microphone Windscreens** - [Amazon Link](https://a.co/d/01RMTvTz) - Medium size recommended
+
+### Enclosure Solution
+
+**✅ Final Design: Foam Windscreen Enclosure**
+
+After testing, the project uses **microphone foam windscreens** as the complete enclosure:
+- **RF Transparent**: <0.5 dB WiFi signal loss (PETG blocked 6-16 dB)
+- **Acoustically Transparent**: Optimized for microphone use
+- **Dust Protection**: Filters particles while allowing airflow
+- **Cost Effective**: ~$1-2 per device
+- **Simple Assembly**: Insert device, route cable, secure with zip tie
+
+See [enclosure/](enclosure/) directory for detailed assembly instructions.
+
+❌ **3D Printed PETG Enclosures**: Initial designs blocked WiFi signals and are not recommended.
+
+### Assembly Notes
+
+⚠️ **Header Pin Issue**: The header pins listed above were not soldered to the PCBs. Manual soldering was required after receipt.
+
+**Recommendation for Future Builds**: Order pre-soldered ("welded") headers and use Dupont jumpers for easier assembly and more reliable connections.
 
 ### ESP32-C3 SuperMini Specifications
 - **MCU**: ESP32-C3 (RISC-V, single-core, 160 MHz)
@@ -392,6 +425,197 @@ curl -X POST http://localhost:3000/api/devices/register \
 
 ---
 
+## OTA Firmware Updates
+
+**✅ Over-The-Air (OTA) Update Capability Active**
+
+The system supports remote firmware updates without physical access to devices. This allows bug fixes, feature additions, and configuration updates to be deployed to all sensors over WiFi.
+
+### How OTA Updates Work
+
+1. **Build New Firmware**
+   ```bash
+   cd firmware/sound-level-sensor
+   # Update FIRMWARE_VERSION in main.c (e.g., "1.0.0" → "1.0.1")
+   idf.py build
+   ```
+
+2. **Upload to Backend**
+   ```bash
+   curl -X POST "http://localhost:3000/api/firmware/upload?version=1.0.1&description=Bug%20fixes" \
+        -H "Content-Type: application/octet-stream" \
+        --data-binary "@build/sound-level-sensor.bin"
+   ```
+
+3. **Automatic Distribution**
+   - Devices check for updates **every hour**
+   - First check occurs **5 minutes** after boot
+   - Update downloaded automatically if newer version available
+   - Device reboots and applies update
+   - **Automatic rollback** if update fails
+
+### OTA Configuration
+
+**Partition Table:**
+- **ota_0**: 1.5 MB - Primary app partition
+- **ota_1**: 1.5 MB - Secondary app partition (for updates)
+- **otadata**: 8 KB - OTA state tracking
+- Configured in `sdkconfig.defaults`: `CONFIG_PARTITION_TABLE_TWO_OTA=y`
+
+**Flash Requirements:**
+- **Minimum**: 4 MB flash (ESP32-C3 SuperMini has 4 MB)
+- **Current firmware size**: ~600-800 KB
+- **Maximum safe size**: ~1.4 MB per partition
+
+**Update Protocol:**
+- **HTTP** (not HTTPS) for simplicity on trusted networks
+- **Authentication**: API key header required
+- **Timeout**: 30 seconds for download
+- **Buffer size**: 1024 bytes
+
+### Managing Firmware Versions
+
+**Check Current Versions:**
+```bash
+# View all available firmware versions
+curl http://localhost:3000/api/firmware/versions
+
+# Get latest version info
+curl http://localhost:3000/api/firmware/latest
+```
+
+**Simulate Device Update Check:**
+```bash
+# Check if update available for device running v1.0.0
+curl "http://localhost:3000/api/firmware/check?device_id=08:92:72:84:1d:18&current_version=1.0.0"
+```
+
+**Response (update available):**
+```json
+{
+  "updateAvailable": true,
+  "version": "1.0.1",
+  "url": "/api/firmware/download/1.0.1",
+  "filename": "sound-sensor-1.0.1.bin",
+  "size": 823456,
+  "releaseDate": "2026-02-10T12:00:00.000Z",
+  "description": "Bug fixes and performance improvements"
+}
+```
+
+**Response (no update):** `204 No Content`
+
+### Firmware Version Tracking
+
+**In Firmware (`main.c`):**
+```c
+#define FIRMWARE_VERSION "1.0.0"
+```
+
+**Version Naming (Semantic Versioning):**
+- **MAJOR.MINOR.PATCH** (e.g., `1.2.3`)
+- **MAJOR**: Breaking changes or major features
+- **MINOR**: Backward-compatible new features
+- **PATCH**: Backward-compatible bug fixes
+
+### Safety Features
+
+1. **Dual Partitions**: Two app partitions allow safe rollback
+2. **Automatic Rollback**: If new firmware fails to boot, device reverts to previous version
+3. **Verification**: Device marks firmware valid only after successful operation
+4. **SHA-256 Checksums**: Firmware integrity verified during download
+5. **Atomic Updates**: Update is complete or not applied (no partial updates)
+
+### Staged Rollout Strategy
+
+For production deployments:
+
+1. **Build and upload** new firmware to backend
+2. **Monitor first device** - Usually updates within 60 minutes
+3. **Verify stability** for 24 hours
+4. **Natural rollout** - Remaining devices update on their hourly check
+5. **Force immediate update** - Reboot devices to trigger immediate check
+
+**Example Monitoring:**
+```bash
+# Device serial output
+Checking for firmware updates...
+Current firmware version: 1.0.0
+Update available: 1.0.1
+Starting OTA update to version 1.0.1...
+OTA update successful! Rebooting...
+
+# After reboot
+Firmware Version: 1.0.1
+Running partition: ota_1
+OTA update pending verification - marking as valid
+```
+
+### Troubleshooting OTA Updates
+
+**Device Not Updating:**
+- Check WiFi connectivity
+- Verify backend is serving firmware: `curl http://localhost:3000/api/firmware/versions`
+- Check device logs during update check interval
+- Confirm version numbers: device must be < backend version
+
+**Update Failed:**
+- Device automatically rolls back to previous version
+- Check serial logs for specific error
+- Common causes:
+  - Firmware too large for partition (max ~1.4 MB)
+  - Network timeout (increase timeout in code)
+  - Invalid binary format
+  - Corrupted download
+
+**Manual Recovery:**
+```bash
+# Flash via USB if OTA fails completely
+cd firmware/sound-level-sensor
+idf.py -p /dev/cu.usbmodem1201 flash
+```
+
+### OTA API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/firmware/check` | GET | Check if update available |
+| `/api/firmware/download/:version` | GET | Download firmware binary |
+| `/api/firmware/versions` | GET | List all versions |
+| `/api/firmware/latest` | GET | Get latest version |
+| `/api/firmware/upload` | POST | Upload new firmware |
+| `/api/firmware/:version` | DELETE | Remove firmware version |
+
+### Monitoring Updates
+
+**Backend Logs:**
+```
+Firmware update check from 08:92:72:84:1d:18: v1.0.0
+Update available for 08:92:72:84:1d:18: v1.0.1
+Serving firmware v1.0.1 (823456 bytes)
+```
+
+**Device Logs:**
+```
+OTA task started
+Checking for firmware updates...
+Current firmware version: 1.0.0
+Update check response: 200, content_length: 145
+Starting OTA update to version 1.0.1
+OTA update successful! Rebooting...
+```
+
+### Best Practices
+
+1. **Test firmware thoroughly** before uploading to production
+2. **Use descriptive release notes** in upload description
+3. **Monitor first device** for 24 hours before wide rollout
+4. **Keep one previous version** available for quick rollback
+5. **Document changes** in firmware version comments
+6. **Backup current firmware** before major updates
+
+---
+
 ## Firmware Features
 
 ### Current Capabilities
@@ -611,6 +835,5 @@ Ctrl+]
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: February 7, 2026  
-**Related Docs**: [README.md](README.md), [DEVELOPER_REFERENCE.md](DEVELOPER_REFERENCE.md)
+**Document Version**: 1.1  
+**Last Updated**: February 10, 2026  

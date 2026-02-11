@@ -496,6 +496,18 @@ body {
     opacity: 0.6;
 }
 
+.map-label {
+    pointer-events: none;
+}
+
+.map-label rect {
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.map-label text {
+    user-select: none;
+}
+
 /* Footer */
 .kiosk-footer {
     background: #0f0f0f;

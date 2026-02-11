@@ -131,21 +131,83 @@ The Sound Level Mesh System uses a **star topology** with ESP32 sensor devices c
 - Interactive 2D map visualization (HTML5 Canvas)
 - Sensor position configuration (X, Y, Z coordinates)
 - Acoustic barrier modeling
+- **Map label management** (NEW - February 2026)
 - Real-time triangulation calculation
 - Visual display of:
   - Sensor positions with coverage circles
   - Sound sources with confidence indicators
-  - Acoustic barriers
+  - Acoustic barriers (walls, curtains, partitions)
+  - Custom map labels for zones/equipment
   - Probability heatmap overlay
-- Controls for sensor/barrier/source visibility
-- Time window selection for event detection
+- Controls for sensor/barrier/label/source visibility
+- Time window selection for continuous measurements
+
+**Map Label System:**
+- Add custom text annotations to map locations
+- Full styling control:
+  - Font size (8-24px) and weight (normal/bold)
+  - Text and background colors
+  - Padding and border radius
+  - Opacity control
+- Interactive management via "Configure Labels" modal:
+  - Add new labels with position (x, y in meters)
+  - Edit existing labels (click to select)
+  - Delete labels with confirmation
+  - Toggle visibility per label
+- Real-time preview on canvas map
+- Labels persist in `backend/data/map_labels.json`
+- Use cases: Mark equipment ("Welding Station"), define zones ("Assembly Area"), label areas ("Storage")
 
 **Key Functions:**
 - `initTriangulation()` - Initialize map canvas
 - `triangulateNow()` - Calculate source positions
-- `renderTriangulationMap()` - Draw map with sensors/sources
-- `configureSensors()` - Set sensor positions
-- `configureBarriers()` - Configure acoustic obstacles
+- `drawMap()` - Render map with all elements
+- `drawLabel()` - Render individual label on canvas
+- `openSensorPositionModal()` - Configure sensor positions
+- `openBarrierModal()` - Configure acoustic obstacles
+- `openLabelModal()` - Manage map labels (NEW)
+- `loadLabels()` - Fetch labels from API (NEW)
+- `populateLabelList()` - Display label list in modal (NEW)
+- `editLabel()` - Edit existing label (NEW)
+
+**Multi-Source Detection Algorithms:**
+
+The system uses a blend of approaches to detect multiple simultaneous sound sources:
+
+1. **Frequency-Band Separation**
+   - Analyzes 3 frequency bands independently:
+     - Low (20-200 Hz): Heavy machinery, HVAC systems
+     - Mid (200-2000 Hz): Power tools, voices
+     - High (2000-8000 Hz): Metal work, compressed air
+   - Each band runs RSS localization separately
+   - Sources with distinct spectral signatures are identified
+   - Minimum 50 dB energy required per band
+
+2. **Temporal Clustering**
+   - Groups measurements into 5-second windows
+   - Analyzes spatial variance across devices over time
+   - Detects persistent vs. transient sources
+   - High coefficient of variation (>0.3) indicates multiple sources
+   - Clusters measurements using spatial pattern similarity
+
+3. **Spatial Merging**
+   - Combines sources within 3 meters (configurable)
+   - Weighted average by confidence scores
+   - Boosts confidence when multiple methods agree
+   - Prevents duplicate detections
+
+4. **Source Classification**
+   - Classifies sources by frequency profile and intensity:
+     - Low band: heavy_machinery, hvac_system, ambient
+     - Mid band: power_tool, machinery, voices_conversation
+     - High band: metal_work_cutting, compressed_air, electronic_equipment
+   - Helps distinguish between different workshop activities
+
+**Confidence Scoring:**
+- Sensor count: 40% (more sensors = higher confidence)
+- Signal strength: 30% (60-100 dB range)
+- Position validity: 30% (within reasonable bounds)
+- Multi-method agreement: +20% bonus when frequency and temporal methods agree
 
 #### 4. History Tab
 **Purpose:** View historical measurement data
@@ -243,6 +305,168 @@ The Sound Level Mesh System uses a **star topology** with ESP32 sensor devices c
 - Large, easy-to-read text and visualizations
 - Ideal for lobbies, control rooms, public spaces
 - Responsive web design
+
+---
+
+## Backend Data Models
+
+The backend uses file-based JSON storage with model classes providing CRUD operations. All models are located in `backend/src/models/`.
+
+### Core Models
+
+#### Device (Device.js)
+Represents an ESP32 sensor device.
+
+**Storage:** `backend/data/devices/{device_id}.json`
+
+**Schema:**
+```javascript
+{
+  device_id: "08:92:72:84:1d:18",      // MAC address
+  mac_address: "08:92:72:84:1d:18",
+  name: "Workshop Sensor 1",
+  nickname: "Welding Area",            // Optional display name
+  location: "North Wall",
+  registered_at: "2026-02-08T10:00:00Z",
+  last_seen: "2026-02-08T12:30:00Z",
+  status: "active",                    // active | inactive | error
+  calibration_offset_db: 0.0,
+  measurement_interval: 5,             // seconds
+  frequency_bands: [...],
+  position: {
+    x: 10.0, y: 20.0, z: 1.5,
+    installation_height: 2.0,
+    coordinate_system: "workshop_floor"
+  }
+}
+```
+
+#### Measurement (Measurement.js)
+Sound level measurements from devices.
+
+**Storage:** `backend/data/measurements/{device_id}_{YYYY-MM-DD}.json`
+
+**Schema:**
+```javascript
+{
+  timestamp: "2026-02-08T12:30:15.234Z",
+  device_id: "08:92:72:84:1d:18",
+  db_level: 72.5,
+  band1_level: 65.3,
+  band2_level: 72.5,
+  band3_level: 58.1,
+  frequency_bands: [
+    { band_number: 1, start_freq: 20, end_freq: 200, level: 65.3 },
+    { band_number: 2, start_freq: 200, end_freq: 2000, level: 72.5 },
+    { band_number: 3, start_freq: 2000, end_freq: 8000, level: 58.1 }
+  ]
+}
+```
+
+#### Alert (Alert.js)
+Alert rules and triggered alerts.
+
+**Storage:** 
+- Rules: `backend/data/alerts/rules.json`
+- History: `backend/data/alerts/history/{YYYY-MM-DD}.json`
+
+#### AcousticBarrier (AcousticBarrier.js)
+Physical barriers affecting sound propagation.
+
+**Storage:** `backend/data/acoustic_barriers.json`
+
+**Schema:**
+```javascript
+{
+  id: "barrier_1707364800000",
+  name: "North Wall",
+  type: "wall" | "curtain" | "partition" | "door" | "window",
+  material: "concrete_wall" | "drywall_single" | "brick_wall" | ...,
+  geometry: {
+    type: "line",
+    start: { x: 0, y: 10, z: 0 },
+    end: { x: 20, y: 10, z: 0 },
+    height: 2.5,
+    thickness: 0.2
+  },
+  acoustic_properties: {
+    transmission_loss_db: 45,          // Sound reduction through barrier
+    reflection_coefficient: 0.7,
+    absorption_coefficient: 0.1
+  },
+  notes: "Concrete block wall",
+  created_at: "2026-02-08T10:00:00Z",
+  updated_at: "2026-02-08T10:00:00Z"
+}
+```
+
+#### MapLabel (MapLabel.js) - NEW (February 2026)
+Custom text labels for map annotation.
+
+**Storage:** `backend/data/map_labels.json`
+
+**Schema:**
+```javascript
+{
+  id: "1707364800000",                 // Timestamp-based ID
+  text: "Welding Station",             // Label text
+  position: {
+    x: 15.0,                           // Meters from origin
+    y: 10.0
+  },
+  style: {
+    fontSize: 16,                      // 8-24 pixels
+    fontWeight: "bold",                // "normal" | "bold"
+    color: "#ffffff",                  // Text color (hex)
+    backgroundColor: "#e74c3c",        // Background color (hex)
+    padding: 8,                        // 2-20 pixels
+    borderRadius: 4,                   // 0-20 pixels
+    opacity: 0.9                       // 0.0-1.0
+  },
+  visible: true,                       // Show/hide label
+  created_at: "2026-02-08T10:00:00Z",
+  updated_at: "2026-02-08T10:00:00Z"
+}
+```
+
+**Methods:**
+- `getAll()` - Fetch all labels
+- `getById(id)` - Fetch single label
+- `create(labelData)` - Create new label
+- `update(id, updates)` - Update existing label
+- `delete(id)` - Delete label
+
+**Use Cases:**
+- Equipment location markers ("CNC Machine", "Welding Station")
+- Zone definitions ("Assembly Area", "Storage", "Office")
+- Safety markers ("Hearing Protection Required")
+- Facility labels ("Loading Dock", "Break Room")
+
+#### SourceLocation (SourceLocation.js)
+Triangulated sound source positions.
+
+**Storage:** `backend/data/source_locations/`
+
+**Schema:**
+```javascript
+{
+  id: "source_1707364800000",
+  timestamp: "2026-02-08T12:30:15Z",
+  position: { x: 25.5, y: 30.2, z: 1.5 },
+  confidence: 85,                      // 0-100
+  method: "rss_band_2+rss_temporal_cluster",
+  sound_characteristics: {
+    peak_db: 82.3,
+    avg_db: 78.5,
+    dominant_frequency_band: 2,
+    frequency_range: { start: 200, end: 2000 }
+  },
+  source_type: "power_tool",           // Classified source
+  measurements_used: 45,
+  sensors_involved: ["08:92:72:84:1d:18", ...],
+  triangulation_metadata: {...}
+}
+```
 
 ---
 
@@ -523,20 +747,68 @@ Response:
 
 #### Triangulation
 ```http
-# Triangulate sound source from recent events
-GET /api/triangulation/locate?time_window_ms=1000
+# Locate single sound source from recent measurements
+GET /api/triangulation/locate?time_window_ms=30000
+
+Response:
+{
+  "position": {
+    "x": 25.5,
+    "y": 30.2,
+    "z": 1.5
+  },
+  "confidence": 85,
+  "method": "rss",
+  "measurements_used": 45,
+  "time_window_ms": 30000
+}
+
+# Locate multiple simultaneous sources
+GET /api/triangulation/locate-multiple?time_window_seconds=30&min_confidence=40
 
 Response:
 {
   "sources": [
     {
-      "x": 25.5,
-      "y": 30.2,
-      "confidence": 0.85,
-      "contributing_devices": 4,
-      "timestamp": "2026-02-08T12:30:45Z"
+      "position": { "x": 25.5, "y": 30.2, "z": 1.5 },
+      "confidence": 85,
+      "method": "rss_band_2+rss_temporal_cluster",
+      "frequency_band": 2,
+      "band_name": "mid",
+      "frequency_range": { "start": 200, "end": 2000 },
+      "source_type": "power_tool",
+      "merged_from": 2,
+      "characteristics": {
+        "avg_db": 82.3,
+        "sensor_count": 5,
+        "dominant_frequency": "mid",
+        "agreement_count": 2
+      }
+    },
+    {
+      "position": { "x": 45.2, "y": 18.7, "z": 1.5 },
+      "confidence": 72,
+      "method": "rss_band_1",
+      "frequency_band": 1,
+      "band_name": "low",
+      "frequency_range": { "start": 20, "end": 200 },
+      "source_type": "hvac_system",
+      "characteristics": {
+        "avg_db": 68.5,
+        "sensor_count": 4,
+        "dominant_frequency": "low"
+      }
     }
-  ]
+  ],
+  "measurements_used": 48,
+  "time_window_seconds": 30,
+  "timestamp": "2026-02-08T12:30:45Z",
+  "options": {
+    "min_confidence": 40,
+    "merge_distance": 3.0,
+    "frequency_bands_enabled": true,
+    "temporal_clustering_enabled": true
+  }
 }
 ```
 
@@ -572,9 +844,120 @@ POST /api/barriers
 GET /api/barriers
 ```
 
+#### Map Labels
+
+**Purpose:** Add custom text labels to annotate locations on the workshop map (both kiosk display and triangulation interface).
+
+```http
+# Get all map labels
+GET /api/labels
+
+Response: 200 OK
+[
+  {
+    "id": "1707364800000",
+    "text": "Welding Station",
+    "position": {
+      "x": 15.0,
+      "y": 10.0
+    },
+    "style": {
+      "fontSize": 16,
+      "fontWeight": "bold",
+      "color": "#ffffff",
+      "backgroundColor": "#e74c3c",
+      "padding": 8,
+      "borderRadius": 4,
+      "opacity": 0.9
+    },
+    "visible": true,
+    "created_at": "2026-02-08T10:00:00Z",
+    "updated_at": "2026-02-08T10:00:00Z"
+  }
+]
+
+# Create new map label
+POST /api/labels
+Content-Type: application/json
+
+{
+  "text": "Assembly Area",
+  "position": {
+    "x": 35.0,
+    "y": 20.0
+  },
+  "style": {
+    "fontSize": 14,
+    "fontWeight": "normal",
+    "color": "#ffffff",
+    "backgroundColor": "#3498db",
+    "padding": 8,
+    "borderRadius": 4,
+    "opacity": 0.9
+  },
+  "visible": true
+}
+
+Response: 201 Created
+{
+  "id": "1707364900000",
+  "text": "Assembly Area",
+  ...
+}
+
+# Get single label
+GET /api/labels/:id
+
+Response: 200 OK
+{ ... }
+
+# Update label
+PUT /api/labels/:id
+Content-Type: application/json
+
+{
+  "text": "Welding Area (Updated)",
+  "position": { "x": 15.5, "y": 10.5 },
+  "style": { "fontSize": 18, "color": "#ff0000" }
+}
+
+Response: 200 OK
+{ ... }
+
+# Delete label
+DELETE /api/labels/:id
+
+Response: 200 OK
+{ "message": "Label deleted successfully" }
+```
+
+**Style Properties:**
+- `fontSize`: 8-24 (pixels)
+- `fontWeight`: "normal" or "bold"
+- `color`: Hex color code for text (e.g., "#ffffff")
+- `backgroundColor`: Hex color code for background (e.g., "#333333")
+- `padding`: 2-20 (pixels)
+- `borderRadius`: 0-20 (pixels, for rounded corners)
+- `opacity`: 0.0-1.0 (transparency)
+
+**Use Cases:**
+- Mark equipment locations ("CNC Machine", "Welding Station")
+- Define work areas ("Assembly Area", "Storage")
+- Label zones ("Quiet Zone", "High Noise Area")
+- Annotate map features ("Office", "Loading Dock")
+
+**Frontend Integration:**
+- **Kiosk Display:** Labels auto-render on SVG map with drop shadows
+- **Triangulation Tab:** Full CRUD interface with "Configure Labels" button
+  - Add/edit/delete labels via modal
+  - Real-time preview on canvas map
+  - Toggle visibility with "Labels" checkbox
+  - Color pickers for text and background
+  - Interactive positioning
+
 ### Complete API Route Modules
 
-The backend implements 9 route modules in `backend/src/routes/`:
+The backend implements 10 route modules in `backend/src/routes/`:
 
 1. **devices.js** - Device registration, management, CRUD operations
 2. **data.js** - Measurement submission and retrieval

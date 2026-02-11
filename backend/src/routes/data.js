@@ -46,7 +46,7 @@ async function verifyApiKey(req, res, next) {
 // Submit measurement data
 router.post('/measurements', verifyApiKey, async (req, res) => {
     try {
-        const { device_id, timestamp, db_level, db_level_raw, frequency_bands } = req.body;
+        const { device_id, timestamp, db_level, db_level_raw, frequency_bands, firmware_version } = req.body;
 
         if (!device_id || !timestamp || db_level === undefined) {
             return res.status(400).json({
@@ -63,8 +63,8 @@ router.post('/measurements', verifyApiKey, async (req, res) => {
             frequency_bands: frequency_bands || []
         });
 
-        // Update device last_seen
-        await DeviceModel.updateLastSeen(device_id);
+        // Update device last_seen and firmware_version
+        await DeviceModel.updateLastSeen(device_id, firmware_version);
 
         // Check alerts
         await AlertModel.checkAlerts(measurement);

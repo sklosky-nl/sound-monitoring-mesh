@@ -59,16 +59,17 @@ async function fetchAllData() {
         updateConnectionStatus(true);
         
         // Fetch all necessary data
-        const [devices, sensors, sources] = await Promise.all([
+        const [devices, sensors, sources, labels] = await Promise.all([
             fetchDevices(),
             fetchSensorPositions(),
-            fetchSoundSources()
+            fetchSoundSources(),
+            fetchMapLabels()
         ]);
         
         // Update UI
         updateSystemStatus(devices);
         updateSensorList(devices);
-        updateMap(devices, sensors, sources);
+        updateMap(devices, sensors, sources, labels);
         updateEventsList(sources);
         updateTimestamp();
         
@@ -133,7 +134,18 @@ async function fetchSoundSources() {
     } catch (error) {
         console.error('Error fetching sound sources:', error);
         return [];
+ 
+
+async function fetchMapLabels() {
+    try {
+        const response = await fetch(`${API.baseUrl}/api/labels`);
+        if (!response.ok) throw new Error('Failed to fetch map labels');
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching map labels:', error);
+        return [];
     }
+}   }
 }
 
 function updateConnectionStatus(connected) {
@@ -218,19 +230,31 @@ function createSensorItem(device) {
             <span class="sensor-status ${isActive ? '' : 'offline'}">
                 ${isActive ? 'Active' : 'Offline'}
             </span>
-        </div>
-        <div class="sensor-reading">
-            <span class="sensor-db">${db.toFixed(1)}</span>
-            <span class="sensor-unit">dB</span>
-        </div>
-        <div class="sensor-time">${formatTime(device.last_seen)}</div>
-    `;
-    
-    return div;
-}
-
-function updateMap(devices, sensors, sources) {
+        </div>, labels) {
     const sensorsGroup = document.getElementById('sensors');
+    const sourcesGroup = document.getElementById('soundSources');
+    const labelsGroup = document.getElementById('mapLabels');
+    
+    // Clear existing elements
+    sensorsGroup.innerHTML = '';
+    sourcesGroup.innerHTML = '';
+    if (labelsGroup) labelsGroup.innerHTML = '';
+    
+    // Calculate best fit for all sensor positions
+    calculateMapBounds(devices, sensors);
+    
+    // Draw barriers (if available)
+    // TODO: Fetch and draw barriers from API
+    
+    // Draw custom labels
+    if (labels && labelsGroup) {
+        labels.forEach(label => {
+            if (label.visible !== false) {
+                const labelElement = createMapLabel(label);
+                labelsGroup.appendChild(labelElement);
+            }
+        });
+    }yId('sensors');
     const sourcesGroup = document.getElementById('soundSources');
     
     // Clear existing elements
@@ -517,7 +541,60 @@ function formatTime(timestamp) {
 
 function formatTimeAgo(timestamp) {
     if (!timestamp) return 'Unknown';
+    createMapLabel(label) {
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('class', 'map-label');
     
+    const x = scaleX(label.position.x);
+    const y = scaleY(label.position.y);
+    
+    const style = label.style || {};
+    const fontSize = style.fontSize || 16;
+    const fontWeight = style.fontWeight || 'normal';
+    const color = style.color || '#ffffff';
+    const bgColor = style.backgroundColor || '#1a1a1a';
+    const padding = style.padding || 8;
+    const borderRadius = style.borderRadius || 4;
+    const opacity = style.opacity || 0.8;
+    
+    // Create text element to measure size
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', x);
+    text.setAttribute('y', y);
+    text.setAttribute('font-size', fontSize);
+    text.setAttribute('font-weight', fontWeight);
+    text.setAttribute('fill', color);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'middle');
+    text.textContent = label.text;
+    
+    // Temporarily add to DOM to measure
+    group.appendChild(text);
+    document.getElementById('mapLabels').appendChild(group);
+    const bbox = text.getBBox();
+    group.removeChild(text);
+    document.getElementById('mapLabels').removeChild(group);
+    
+    // Create background rectangle
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', bbox.x - padding);
+    rect.setAttribute('y', bbox.y - padding);
+    rect.setAttribute('width', bbox.width + (padding * 2));
+    rect.setAttribute('height', bbox.height + (padding * 2));
+    rect.setAttribute('rx', borderRadius);
+    rect.setAttribute('ry', borderRadius);
+    rect.setAttribute('fill', bgColor);
+    rect.setAttribute('opacity', opacity);
+    rect.setAttribute('stroke', color);
+    rect.setAttribute('stroke-width', '1');
+    
+    group.appendChild(rect);
+    group.appendChild(text);
+    
+    return group;
+}
+
+function 
     const now = new Date();
     const time = new Date(timestamp);
     const diffMs = now - time;

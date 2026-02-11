@@ -81,12 +81,14 @@ A distributed sound monitoring system consisting of ESP32-C3-based WiFi sensor d
   - WiFi connectivity with HTTP client
   - Shared API key authentication
   - Automatic MAC address-based device identification
+  - **OTA firmware updates** - Remote updates over WiFi
   - See `firmware/sound-level-sensor/`
 - ✅ **Backend API Server** - Complete and operational
   - Node.js/Express with file-based JSON storage
-  - Full REST API with 9 route modules
+  - Full REST API with 10 route modules
   - Shared API key validation
   - Device, measurement, alert, analytics, triangulation endpoints
+  - **Firmware management** - OTA update serving and version control
   - See `backend/`
 - ✅ **Frontend Dashboard** - Complete and operational
   - 7 functional tabs (Dashboard, Devices, Triangulation, History, Alerts, Analytics, Settings)
@@ -143,6 +145,7 @@ Older documentation files have been consolidated. See [docs-archive/](docs-archi
 - **Microcontroller:** ESP32-C3 Super Mini Development Board (4MB flash) - ✅ **10 units purchased**
 - **Microphone:** MH-ET LIVE INMP441 I2S Digital Microphone Module - ✅ **10 units purchased**
 - **Power:** USB Wall Chargers + USB-C Cables - ✅ **10 chargers, 12 cables purchased**
+- **Enclosure:** Microphone foam windscreens - ✅ **Simple, RF-transparent dust protection**
 - **Deployed:** 9 devices currently operational and sending data
 - **Status:** Hardware delivered and operational (February 2026)
 
@@ -152,6 +155,9 @@ Older documentation files have been consolidated. See [docs-archive/](docs-archi
 - **Libraries:** ESP-IDF WiFi, HTTP client, I2S driver, ESP-DSP
 - **Device Identification:** Automatic via MAC address (e.g., `08:92:72:84:1d:18`)
 - **Authentication:** Shared API key across all devices
+- **OTA Updates:** Over-the-air firmware updates via HTTP
+- **Partition Table:** Dual OTA partitions for safe rollback
+- **Version Control:** Semantic versioning (MAJOR.MINOR.PATCH)
 
 ### Authentication Architecture
 **Shared API Key Approach:**
@@ -180,11 +186,14 @@ Older documentation files have been consolidated. See [docs-archive/](docs-archi
   - **Dashboard:** Real-time device monitoring with live statistics
   - **Devices:** Device registration, management, and configuration
   - **Triangulation:** Sound source localization with visual 2D map
+    - Interactive sensor position configuration
+    - Acoustic barrier modeling
+    - **Map Labels:** Custom text annotations for zones/equipment (add/edit/delete)
   - **History:** Time-series data viewer with second-precision datetime controls
   - **Alerts:** Alert rule configuration and history viewer
   - **Analytics:** Statistical analysis and trend visualization
   - **Settings:** System configuration and data management
-  - **Kiosk Mode:** Public display dashboard (separate page)
+  - **Kiosk Mode:** Public display dashboard with auto-scaling map and labels
 - **Responsive:** Works on desktop and tablet devices
 
 ### Development Environment
@@ -213,6 +222,7 @@ sound-monitoring-mesh/
 ├── sound level mesh architecture.md    # Architecture Document
 ├── sound level mesh hardware design.md # Hardware Design Document
 ├── COMPONENT_PINOUT_REFERENCE.md       # Verified component pinouts
+├── enclosure/                          # 3D printable enclosure files
 └── .gitignore                          # Git ignore rules
 ```
 
@@ -371,9 +381,69 @@ For questions or inquiries about this project, please contact the project mainta
 
 ---
 
-**Last Updated:** January 30, 2026  
-**Project Phase:** ✅ Build Complete - Ready for Testing  
-**Code Status:** All components built and ready to deploy
+## 📋 Recent Changes
+
+### February 10, 2026 - OTA Firmware Updates
+**New Feature: Over-The-Air Firmware Updates**
+- Added OTA update capability for remote firmware deployment
+- **Firmware Changes:**
+  - Updated partition table to `TWO_OTA` for dual app partitions
+  - Increased flash size configuration from 2MB to 4MB
+  - Added OTA update task checking for updates every hour
+  - Automatic rollback on failed updates
+  - Version tracking with semantic versioning (e.g., "1.0.0")
+  - First check 5 minutes after boot, then hourly
+- **Backend: Firmware Management API**
+  - New model: `Firmware.js` with version tracking and binary management
+  - New routes: `firmware.js` providing OTA endpoints
+  - Storage: `backend/data/firmware/` directory for binaries and metadata
+  - Endpoints: `/check`, `/download/:version`, `/upload`, `/versions`, `/latest`
+  - HTTP-based downloads for simplicity on trusted networks
+  - SHA-256 checksums for integrity verification
+- **Features:**
+  - Automatic update checks and downloads
+  - Staged rollout support (monitor first device before wide deployment)
+  - Version comparison using semantic versioning
+  - Safe dual-partition updates with automatic rollback
+  - Update history and version tracking
+- **Documentation:**
+  - Added comprehensive OTA section to HARDWARE_AND_FIRMWARE.md
+  - Created firmware management README at `backend/data/firmware/README.md`
+  - Updated system documentation for OTA workflows
+- **Use Cases:** Bug fixes, feature additions, configuration updates without physical access
+- **Safety:** Dual partitions prevent bricking, automatic rollback on failures
+
+### February 8, 2026 - Map Label System
+**New Feature: Custom Map Labels**
+- Added map label management system for annotating workshop maps
+- Backend: New `/api/labels` REST API with full CRUD operations
+  - Model: `MapLabel.js` with JSON file storage
+  - Routes: `labels.js` providing GET, POST, PUT, DELETE endpoints
+  - Storage: `backend/data/map_labels.json`
+- Frontend: Interactive label management in Triangulation tab
+  - "Configure Labels" button opens modal interface
+  - Add/edit/delete labels with position and styling
+  - Full style customization (colors, fonts, opacity, borders)
+  - Toggle label visibility with "Labels" checkbox
+  - Real-time canvas rendering with drop shadows
+- Kiosk Display: Auto-rendering of styled labels on SVG map
+  - Labels display between barriers and sensors
+  - Dynamic scaling with map bounds
+  - Sample labels included: Welding Station, Assembly Area, Storage
+- Use cases: Equipment markers, zone definitions, safety indicators
+- Documentation: Updated DEVELOPER_REFERENCE.md with API details and schemas
+
+### January 30, 2026 - Build Complete
+- All firmware, backend, and frontend components completed
+- 9 ESP32-C3 devices operational and sending data
+- Full triangulation system with multi-source detection
+- Kiosk display mode for public viewing
+
+---
+
+**Last Updated:** February 10, 2026  
+**Project Phase:** ✅ Build Complete - Production Deployment  
+**Code Status:** All components operational with 9 active devices
 
 **📖 Next Steps:** See [QUICKSTART.md](QUICKSTART.md) for setup instructions
 

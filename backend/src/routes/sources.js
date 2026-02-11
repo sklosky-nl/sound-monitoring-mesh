@@ -64,35 +64,27 @@ router.get('/stats/summary', async (req, res) => {
     }
 });
 
-// Trigger manual triangulation for recent events
+// Trigger manual triangulation for recent measurements
 router.post('/triangulate', async (req, res) => {
     try {
         const { startTimestamp, endTimestamp } = req.body;
         
-        // Get events from time range
-        const events = await MeasurementModel.getEvents(startTimestamp, endTimestamp);
+        // Get measurements from time range
+        const measurements = await MeasurementModel.getMeasurements(startTimestamp, endTimestamp);
         
-        if (events.length === 0) {
-            return res.json({ message: 'No events found in time range', locations: [] });
+        if (measurements.length === 0) {
+            return res.json({ message: 'No measurements found in time range', locations: [] });
         }
 
-        // Correlate events
-        const eventGroups = await TriangulationService.correlateEvents(events);
+        // Apply RSS triangulation
+        const location = await TriangulationService.calculateRSS(measurements);
         
-        // Process each group
-        const locations = [];
-        for (const group of eventGroups) {
-            const location = await TriangulationService.processEventGroup(group);
-            if (location) {
-                locations.push(location);
-            }
-        }
+        const locations = location ? [location] : [];
 
-        logger.info(`Manual triangulation: ${events.length} events -> ${locations.length} locations`);
+        logger.info(`Manual triangulation: ${measurements.length} measurements -> ${locations.length} locations`);
         res.json({ 
             message: 'Triangulation completed',
-            events_processed: events.length,
-            event_groups: eventGroups.length,
+            measurements_processed: measurements.length,
             locations_found: locations.length,
             locations
         });
