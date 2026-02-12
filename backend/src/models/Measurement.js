@@ -125,6 +125,35 @@ class MeasurementModel {
             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
             .slice(0, limit);
     }
+
+    static async getAvailableDates(deviceId) {
+        await this.ensureDirectory();
+        
+        try {
+            const files = await fs.readdir(MEASUREMENTS_DIR);
+            const dates = [];
+            
+            for (const file of files) {
+                if (!file.endsWith('.json')) continue;
+                
+                // Check if file matches this device
+                if (file.startsWith(deviceId + '_')) {
+                    const parts = file.replace('.json', '').split('_');
+                    if (parts.length >= 2) {
+                        const dateStr = parts[parts.length - 1];
+                        dates.push(dateStr);
+                    }
+                }
+            }
+            
+            // Sort dates chronologically
+            dates.sort();
+            return dates;
+        } catch (error) {
+            logger.error('Error getting available dates:', error);
+            return [];
+        }
+    }
 }
 
 module.exports = MeasurementModel;

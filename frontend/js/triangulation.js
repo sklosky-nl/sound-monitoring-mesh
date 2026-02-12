@@ -18,7 +18,9 @@ const TriangulationState = {
     mapOffsetX: 0,
     mapOffsetY: 0,
     isDragging: false,
-    materialPresets: {}
+    materialPresets: {},
+    playbackController: null,
+    isPlaybackMode: false
 };
 
 // Initialize triangulation when tab is loaded
@@ -42,6 +44,7 @@ async function initTriangulation() {
     document.getElementById('configureSensorsBtn').addEventListener('click', openSensorPositionModal);
     document.getElementById('configureBarriersBtn').addEventListener('click', openBarrierModal);
     document.getElementById('configureLabelsBtn').addEventListener('click', openLabelModal);
+    document.getElementById('enablePlaybackBtn').addEventListener('click', enablePlaybackMode);
     document.getElementById('triangulateNowBtn').addEventListener('click', triggerTriangulation);
     document.getElementById('resetViewBtn').addEventListener('click', resetMapView);
     
@@ -848,3 +851,249 @@ document.getElementById('cancelLabelBtn')?.addEventListener('click', () => {
     document.getElementById('labelEditorTitle').textContent = 'New Label';
     document.getElementById('deleteLabelBtn').style.display = 'none';
 });
+
+// ========================================
+// Historical Playback Functions (v2.0.0)
+// ========================================
+
+async function enablePlaybackMode() {
+    try {
+        // Show playback section
+        document.getElementById('playbackSection').style.display = 'block';
+        TriangulationState.isPlaybackMode = true;
+        
+        // Initialize playback controller if not already done
+        if (!TriangulationState.playbackController) {
+            TriangulationState.playbackController = new PlaybackController();
+            
+            // Set up callbacks
+            TriangulationState.playbackController.onTimeUpdate = updatePlaybackTime;
+            TriangulationState.playbackController.onDataLoad = updatePlaybackData;
+            TriangulationState.playbackController.onPlayStateChange = updatePlaybackPlayButton;
+            TriangulationState.playbackController.onRangeUpdate = updatePlaybackDateInputs;
+            
+            // Initialize playback controls
+            setupPlaybackControls();
+            
+            // Initialize the controller
+            const success = await TriangulationState.playbackController.initialize();
+            
+            if (!success) {
+                alert('No historical data available for playback');
+                exitPlaybackMode();
+                return;
+            }
+        }
+        
+        // Disable live updates
+        document.getElementById('timeRangeSelect').disabled = true;
+        document.getElementById('triangulateNowBtn').disabled = true;
+        
+        console.log('Playback mode enabled');
+    } catch (error) {
+        console.error('Error enabling playback mode:', error);
+        alert('Failed to enable playback mode: ' + error.message);
+    }
+}
+
+function exitPlaybackMode() {
+    document.getElementById('playbackSection').style.display = 'none';
+    TriangulationState.isPlaybackMode = false;
+    
+    if (TriangulationState.playbackController) {
+        TriangulationState.playbackController.pause();
+    }
+    
+    // Re-enable live updates
+    document.getElementById('timeRangeSelect').disabled = false;
+    document.getElementById('triangulateNowBtn').disabled = false;
+    
+    // Reload live data
+    loadRecentSources();
+    
+    console.log('Playback mode exited');
+}
+
+function setupPlaybackControls() {
+    // Exit playback button
+    document.getElementById('exitPlaybackBtn').addEventListener('click', exitPlaybackMode);
+    
+    // Load data button
+    document.getElementById('loadPlaybackDataBtn').addEventListener('click', loadPlaybackTimeRange);
+    
+    // Transport controls
+    document.getElementById('skipToStartBtn').addEventListener('click', () => {
+        TriangulationState.playbackController.skipToStart();
+    });
+    
+    document.getElementById('jogBackwardBtn').addEventListener('click', () => {
+        TriangulationState.playbackController.jogBackward(1);
+    });
+    
+    document.getElementById('playPauseBtn').addEventListener('click', () => {
+        if (TriangulationState.playbackController.isPlaying) {
+            TriangulationState.playbackController.pause();
+        } else {
+            TriangulationState.playbackController.play();
+        }
+    });
+    
+    document.getElementById('jogForwardBtn').addEventListener('click', () => {
+        TriangulationState.playbackController.jogForward(1);
+    });
+    
+    document.getElementById('skipToEndBtn').addEventListener('click', () => {
+        TriangulationState.playbackController.skipToEnd();
+    });
+    
+    // Timeline slider
+    const timelineSlider = document.getElementById('timelineSlider');
+    let isSliderDragging = false;
+    
+    timelineSlider.addEventListener('mousedown', () => {
+        isSliderDragging = true;
+        if (TriangulationState.playbackController.isPlaying) {
+            TriangulationState.playbackController.pause();
+        }
+    });
+    
+    timelineSlider.addEventListener('mouseup', () => {
+        isSliderDragging = false;
+    });
+    
+    timelineSlider.addEventListener('input', (e) => {
+        if (!TriangulationState.playbackController) return;
+        
+        const progress = parseFloat(e.target.value);
+        const duration = TriangulationState.playbackController.getDuration();
+        const newTime = new Date(
+            TriangulationState.playbackController.startTime.getTime() + 
+            (duration * progress / 100)
+        );
+        
+        TriangulationState.playbackController.seek(newTime);
+    });
+    
+    // Speed buttons
+    document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const speed = parseFloat(e.target.dataset.speed);
+            TriangulationState.playbackController.setSpeed(speed);
+            
+            // Update active state
+            document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+        });
+    });
+}
+
+function loadPlaybackTimeRange() {
+    const startDate = document.getElementById('playbackStartDate').value;
+    const startTime = document.getElementById('playbackStartTime').value;
+    const endDate = document.getElementById('playbackEndDate').value;
+    const endTime = document.getElementById('playbackEndTime').value;
+    
+    if (!startDate || !startTime || !endDate || !endTime) {
+        alert('Please fill in all date/time fields');
+        return;
+    }
+    
+    const start = new Date(`${startDate}T${startTime}`);
+    const end = new Date(`${endDate}T${endTime}`);
+    
+    if (end <= start) {
+        alert('End time must be after start time');
+        return;
+    }
+    
+    // Update playback controller time range
+    TriangulationState.playbackController.startTime = start;
+    TriangulationState.playbackController.endTime = end;
+    TriangulationState.playbackController.currentTime = new Date(start);
+    
+    // Clear cache and reload
+    TriangulationState.playbackController.clearCache();
+    TriangulationState.playbackController.updateCurrentFrame();
+    
+    console.log(`Loaded playback range: ${start.toISOString()} to ${end.toISOString()}`);
+}
+
+function updatePlaybackTime(time) {
+    // Update time display
+    document.getElementById('currentTimeDisplay').textContent = formatPlaybackTime(time);
+    
+    // Update timeline slider
+    const progress = TriangulationState.playbackController.getProgress();
+    document.getElementById('timelineSlider').value = progress;
+}
+
+function updatePlaybackData(data) {
+    // Update map with historical data
+    if (data.deviceStates) {
+        // Update sensor states
+        TriangulationState.sensors = data.deviceStates.filter(d => d.position).map(d => ({
+            device_id: d.device_id,
+            nickname: d.nickname,
+            position: d.position,
+            status: d.active ? 'active' : 'offline'
+        }));
+        
+        updateSensorStatusList();
+    }
+    
+    if (data.sources) {
+        // Update sound sources
+        TriangulationState.sources = data.sources;
+        updateSourcesList();
+    }
+    
+    // Redraw map
+    drawMap();
+}
+
+function updatePlaybackPlayButton(isPlaying) {
+    const btn = document.getElementById('playPauseBtn');
+    btn.textContent = isPlaying ? '⏸' : '▶';
+}
+
+function updatePlaybackDateInputs(range) {
+    // Set date inputs to available range
+    const startDate = range.start.toISOString().split('T')[0];
+    const startTime = range.start.toISOString().split('T')[1].split('.')[0];
+    const endDate = range.end.toISOString().split('T')[0];
+    const endTime = range.end.toISOString().split('T')[1].split('.')[0];
+    
+    document.getElementById('playbackStartDate').value = startDate;
+    document.getElementById('playbackStartTime').value = startTime;
+    document.getElementById('playbackEndDate').value = endDate;
+    document.getElementById('playbackEndTime').value = endTime;
+    
+    // Update duration display
+    document.getElementById('durationDisplay').textContent = 
+        `${range.totalDays} days (${formatPlaybackDuration(range.end.getTime() - range.start.getTime())})`;
+}
+
+function formatPlaybackTime(date) {
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+function formatPlaybackDuration(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
+}
+

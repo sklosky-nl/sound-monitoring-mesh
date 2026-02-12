@@ -192,6 +192,17 @@ class SourceLocationModel {
         logger.info(`Source location cleanup complete: ${deletedCount} files deleted`);
         return deletedCount;
     }
+
+    // Alias for historical playback (filters by exact timestamp)
+    static async getLocationsByDateRange(startDate, endDate) {
+        const locations = await this.getLocations(startDate, endDate);
+        
+        // Filter by exact timestamp
+        return locations.filter(loc => {
+            const locTime = new Date(loc.timestamp);
+            return locTime >= startDate && locTime <= endDate;
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    }
 }
 
 module.exports = SourceLocationModel;

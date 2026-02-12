@@ -1,7 +1,7 @@
 # Sound Monitoring Mesh System - Version Information
 
-## Current Version: 1.2.0
-**Release Date:** February 11, 2026
+## Current Version: 2.0.0
+**Release Date:** February 12, 2026
 
 ## Component Versions
 
@@ -11,17 +11,25 @@
 - **Build System:** ESP-IDF 6.1
 
 ### Backend API
-- **Version:** 1.2.0
+- **Version:** 2.0.0
 - **Runtime:** Node.js >=18.0.0
 - **Framework:** Express.js 4.18.2
 
 ### Frontend
-- **Version:** 1.2.0
+- **Version:** 2.0.0
 - **Main Dashboard:** index.html
 - **Kiosk Display:** kiosk.html
 - **Dependencies:** Chart.js 4.4.0
 
 ## Version History
+
+### 2.0.0 (2026-02-12) 🎯 MAJOR RELEASE
+- Historical data playback feature
+- Timeline controls with variable speed
+- Date/time range selection
+- Transport controls (play, pause, jog, skip)
+- Backend API endpoints for historical queries
+- Enhanced triangulation visualization
 
 ### 1.2.0 (2026-02-11)
 - Production deployment fixes
@@ -56,15 +64,17 @@
 - **Firmware 1.2.1-prod:** 5 devices
 - **Firmware 1.1.1:** 4 devices
 
-## Next Release: 2.0.0 (Planned)
+## Development Status
 
-### Major Features
-- Historical data playback
-- Timeline controls with jog functionality
-- Variable playback speed (0.25x - 10x)
-- Enhanced triangulation visualization
+### Currently in Development (Dev System Only)
+- v2.0.0 historical playback feature
+- Not yet deployed to production server
+
+### Production Deployment
+- Production server running v1.2.0
+- Historical playback available for local development and testing
 
 ---
 
 **Maintainer:** Stephen Klosky  
-**Last Updated:** February 11, 2026
+**Last Updated:** February 12, 2026

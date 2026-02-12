@@ -255,4 +255,223 @@ router.get('/locate-multiple', async (req, res) => {
     }
 });
 
+// ========================================
+// Historical Playback Endpoints (v2.0.0)
+// ========================================
+
+// Get historical measurements in time range
+router.get('/playback/measurements', async (req, res) => {
+    try {
+        const { startTime, endTime, deviceIds } = req.query;
+        
+        if (!startTime || !endTime) {
+            return res.status(400).json({ error: 'startTime and endTime are required' });
+        }
+        
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return res.status(400).json({ error: 'Invalid date format' });
+        }
+        
+        if (end <= start) {
+            return res.status(400).json({ error: 'endTime must be after startTime' });
+        }
+        
+        // Get all or specific devices
+        const devices = deviceIds 
+            ? deviceIds.split(',').map(id => ({ device_id: id }))
+            : await DeviceModel.getAllDevices();
+        
+        const allMeasurements = [];
+        
+        for (const device of devices) {
+            const measurements = await MeasurementModel.getMeasurements(
+                device.device_id,
+                start.toISOString().split('T')[0],
+                end.toISOString().split('T')[0]
+            );
+            
+            // Filter to exact time window
+            const filtered = measurements.filter(m => {
+                const timestamp = new Date(m.timestamp);
+                return timestamp >= start && timestamp <= end;
+            }).map(m => ({
+                ...m,
+                device_id: device.device_id
+            }));
+            
+            allMeasurements.push(...filtered);
+        }
+        
+        // Sort by timestamp
+        allMeasurements.sort((a, b) => 
+            new Date(a.timestamp) - new Date(b.timestamp)
+        );
+        
+        res.json({
+            measurements: allMeasurements,
+            count: allMeasurements.length,
+            startTime,
+            endTime,
+            devices: devices.length
+        });
+        
+    } catch (error) {
+        logger.error('Error getting historical measurements:', error);
+        res.status(500).json({ error: 'Failed to get historical measurements' });
+    }
+});
+
+// Get historical sound sources in time range
+router.get('/playback/sources', async (req, res) => {
+    try {
+        const { startTime, endTime } = req.query;
+        
+        if (!startTime || !endTime) {
+            return res.status(400).json({ error: 'startTime and endTime are required' });
+        }
+        
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return res.status(400).json({ error: 'Invalid date format' });
+        }
+        
+        const sources = await SourceLocationModel.getLocationsByDateRange(start, end);
+        
+        res.json({
+            sources,
+            count: sources.length,
+            startTime,
+            endTime
+        });
+        
+    } catch (error) {
+        logger.error('Error getting historical sources:', error);
+        res.status(500).json({ error: 'Failed to get historical sources' });
+    }
+});
+
+// Get playback data for a specific time window (measurements + sources)
+router.get('/playback/window', async (req, res) => {
+    try {
+        const { time, windowSeconds = 10 } = req.query;
+        
+        if (!time) {
+            return res.status(400).json({ error: 'time parameter is required' });
+        }
+        
+        const centerTime = new Date(time);
+        if (isNaN(centerTime.getTime())) {
+            return res.status(400).json({ error: 'Invalid date format' });
+        }
+        
+        const halfWindow = parseInt(windowSeconds) * 1000 / 2;
+        const startTime = new Date(centerTime.getTime() - halfWindow);
+        const endTime = new Date(centerTime.getTime() + halfWindow);
+        
+        // Get measurements from all devices
+        const devices = await DeviceModel.getAllDevices();
+        const measurements = [];
+        
+        for (const device of devices) {
+            const deviceMeasurements = await MeasurementModel.getMeasurements(
+                device.device_id,
+                startTime.toISOString().split('T')[0],
+                endTime.toISOString().split('T')[0]
+            );
+            
+            const filtered = deviceMeasurements.filter(m => {
+                const timestamp = new Date(m.timestamp);
+                return timestamp >= startTime && timestamp <= endTime;
+            }).map(m => ({
+                ...m,
+                device_id: device.device_id
+            }));
+            
+            measurements.push(...filtered);
+        }
+        
+        // Get sound sources in window
+        const sources = await SourceLocationModel.getLocationsByDateRange(startTime, endTime);
+        
+        // Get device states at this time
+        const deviceStates = devices.map(device => {
+            const deviceMeasurements = measurements.filter(m => m.device_id === device.device_id);
+            const latest = deviceMeasurements.length > 0 
+                ? deviceMeasurements[deviceMeasurements.length - 1]
+                : null;
+            
+            return {
+                device_id: device.device_id,
+                nickname: device.nickname,
+                position: device.position,
+                latest_measurement: latest,
+                active: latest !== null
+            };
+        });
+        
+        res.json({
+            time: centerTime.toISOString(),
+            windowSeconds: parseInt(windowSeconds),
+            measurements,
+            sources,
+            deviceStates,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        logger.error('Error getting playback window:', error);
+        res.status(500).json({ error: 'Failed to get playback window' });
+    }
+});
+
+// Get available time range for playback
+router.get('/playback/range', async (req, res) => {
+    try {
+        const devices = await DeviceModel.getAllDevices();
+        let earliestMeasurement = null;
+        let latestMeasurement = null;
+        
+        for (const device of devices) {
+            // Get first and last measurement dates
+            const allDates = await MeasurementModel.getAvailableDates(device.device_id);
+            
+            if (allDates.length > 0) {
+                const firstDate = new Date(allDates[0]);
+                const lastDate = new Date(allDates[allDates.length - 1]);
+                
+                if (!earliestMeasurement || firstDate < earliestMeasurement) {
+                    earliestMeasurement = firstDate;
+                }
+                
+                if (!latestMeasurement || lastDate > latestMeasurement) {
+                    latestMeasurement = lastDate;
+                }
+            }
+        }
+        
+        if (!earliestMeasurement || !latestMeasurement) {
+            return res.json({
+                available: false,
+                message: 'No historical data available'
+            });
+        }
+        
+        res.json({
+            available: true,
+            earliestTime: earliestMeasurement.toISOString(),
+            latestTime: latestMeasurement.toISOString(),
+            totalDays: Math.ceil((latestMeasurement - earliestMeasurement) / (1000 * 60 * 60 * 24))
+        });
+        
+    } catch (error) {
+        logger.error('Error getting playback range:', error);
+        res.status(500).json({ error: 'Failed to get playback range' });
+    }
+});
+
 module.exports = router;

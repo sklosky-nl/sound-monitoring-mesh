@@ -5,6 +5,39 @@ All notable changes to the Sound Monitoring Mesh System will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-12
+
+### Added
+- **Major Feature**: Historical data playback for triangulation visualization
+  - Timeline controls with play/pause, jog forward/backward
+  - Variable playback speed (0.25x, 0.5x, 1x, 2x, 5x, 10x)
+  - Date/time range selection (day, hour, minute, second precision)
+  - Transport controls (skip to start/end, jog 1 second)
+  - Real-time timeline slider with progress indicator
+  - Historical sensor state visualization
+  - Historical sound source replay
+  - Data caching for smooth playback
+- Backend API endpoints for historical playback:
+  - `/api/triangulation/playback/measurements` - Get measurements in time range
+  - `/api/triangulation/playback/sources` - Get sound sources in time range
+  - `/api/triangulation/playback/window` - Get data for specific time window
+  - `/api/triangulation/playback/range` - Get available data range
+- `PlaybackController` class for managing playback state and controls
+- `getAvailableDates()` method in Measurement model
+- `getLocationsByDateRange()` method in SourceLocation model
+- Comprehensive playback UI with responsive design
+- Playback mode indicator and controls styling
+
+### Changed
+- Version synchronized to 2.0.0 across all components
+- Enhanced triangulation interface with playback mode toggle
+- Updated frontend script versions for cache busting
+
+### Developer Notes
+- Playback feature implemented on dev system only (not yet deployed to production)
+- Historical data playback allows analysis of past sound events
+- Playback speed control enables both detailed analysis (slow) and overview (fast)
+
 ## [1.2.0] - 2026-02-11
 
 ### Added
