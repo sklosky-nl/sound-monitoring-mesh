@@ -30,14 +30,16 @@ A distributed sound monitoring system consisting of ESP32-C3-based WiFi sensor d
   - Frontend: http://localhost:8080
   - Device MAC: 08:92:72:84:1d:18
 
-### ⏳ Production Environment #2 (Nova Labs - In Progress)
+### Production Environment (Nova Labs)
 - 📍 Location: Nova Labs makerspace
-- 📡 WiFi Network: YOUR_WORKSHOP_WIFI (isolated IoT network)
-- 🔒 Network Password: YOUR_WORKSHOP_PASSWORD
-- 💻 Server: Ubuntu 20.04+ (TBD)
-- 📱 Deployment: All 10 ESP32-C3 sensors
-- 🌐 Backend URL: TBD (configure when server ready)
-- 🔑 **Shared API Key**: All devices use same key (configured in firmware and backend)
+- 📡 WiFi Network: REDACTED_WORKSHOP_WIFI_SSID (isolated IoT network)
+- 🔒 Network Password: REDACTED
+- 💻 Server: Ubuntu 20.04.2 LTS (xibo.space.nova-labs.org)
+- 📱 Deployment: 9 ESP32-C3 sensors (8 active, 1 offline)
+- 🌐 Backend URL: http://xibo.space.nova-labs.org/api/sound
+- 🖥️ Frontend URL: http://xibo.space.nova-labs.org/sound/
+- 🔑 **Shared API Key**: REDACTED
+- 📦 **Current Firmware**: v1.2.1-prod
   - Example: `YOUR_API_KEY_HERE`
   - Set in firmware via `CONFIG_API_KEY` (sdkconfig)
   - Set in backend via `SHARED_API_KEY` in `.env`

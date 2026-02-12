@@ -11,6 +11,13 @@ if (typeof API === 'undefined') {
     throw new Error('API module not loaded');
 }
 
+// Debug: Log API configuration
+console.log('=== Sound Monitoring System Initialized ===');
+console.log('Current hostname:', window.location.hostname);
+console.log('API baseUrl:', API.baseUrl);
+console.log('localStorage apiUrl:', localStorage.getItem('apiUrl'));
+console.log('===========================================');
+
 // State management
 const State = {
     devices: [],
@@ -183,7 +190,8 @@ async function loadDevices() {
         // Show error on dashboard too
         const devicesGrid = document.getElementById('devicesGrid');
         if (devicesGrid) {
-            devicesGrid.innerHTML = `<p class="error-message" style="color: red; padding: 20px;">Failed to load devices: ${error.message}. Please check that the backend is running at http://localhost:3000</p>`;
+            const backendUrl = API.baseUrl.startsWith('/') ? window.location.origin + API.baseUrl : API.baseUrl;
+            devicesGrid.innerHTML = `<p class="error-message" style="color: red; padding: 20px;">Failed to load devices: ${error.message}. Please check that the backend is running at ${backendUrl}</p>`;
         }
     }
 }

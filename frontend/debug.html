@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Sound Monitoring API</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #f5f5f5;
+        }
+        .test {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #ccc;
+        }
+        .test.success { border-left-color: #4CAF50; }
+        .test.error { border-left-color: #f44336; }
+        .test.pending { border-left-color: #2196F3; }
+        pre {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Sound Monitoring System - Debug Page</h1>
+    <p>This page tests the API connection and shows diagnostic information.</p>
+    
+    <button onclick="runAllTests()">Run All Tests</button>
+    <button onclick="clearStorage()">Clear localStorage</button>
+    <button onclick="location.reload(true)">Hard Refresh</button>
+    
+    <div id="results"></div>
+
+    <!-- Load API module for testing -->
+    <script src="js/api.js?v=16"></script>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+
+        function addResult(title, status, message, data = null) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `
+                <h3>${title}</h3>
+                <p><strong>Status:</strong> ${status.toUpperCase()}</p>
+                <p>${message}</p>
+                ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ''}
+            `;
+            resultsDiv.appendChild(div);
+        }
+
+        function clearStorage() {
+            localStorage.clear();
+            addResult('LocalStorage Cleared', 'success', 'All localStorage data has been cleared. Refresh the page to reload with defaults.');
+        }
+
+        async function runAllTests() {
+            resultsDiv.innerHTML = '<h2>Running Tests...</h2>';
+
+            // Test 1: Environment Info
+            addResult(
+                'Environment Information',
+                'pending',
+                'Current page context',
+                {
+                    hostname: window.location.hostname,
+                    pathname: window.location.pathname,
+                    origin: window.location.origin,
+                    localStorage_apiUrl: localStorage.getItem('apiUrl')
+                }
+            );
+
+            // Test 2: Direct API call with relative path
+            try {
+                addResult('Test 2: Fetch /api/sound/api/devices', 'pending', 'Testing relative path...');
+                const response1 = await fetch('/api/sound/api/devices');
+                const data1 = await response1.json();
+                addResult(
+                    'Test 2: Relative Path',
+                    response1.ok ? 'success' : 'error',
+                    `HTTP ${response1.status}: ${response1.statusText}`,
+                    response1.ok ? { deviceCount: data1.length, firstDevice: data1[0]?.nickname } : data1
+                );
+            } catch (error) {
+                addResult('Test 2: Relative Path', 'error', error.message);
+            }
+
+            // Test 3: Direct API call with absolute path
+            try {
+                addResult('Test 3: Fetch with absolute URL', 'pending', 'Testing absolute URL...');
+                const response2 = await fetch('http://xibo.space.nova-labs.org/api/sound/api/devices');
+                const data2 = await response2.json();
+                addResult(
+                    'Test 3: Absolute URL',
+                    response2.ok ? 'success' : 'error',
+                    `HTTP ${response2.status}: ${response2.statusText}`,
+                    response2.ok ? { deviceCount: data2.length } : data2
+                );
+            } catch (error) {
+                addResult('Test 3: Absolute URL', 'error', error.message);
+            }
+
+            // Test 4: Check if API module is loaded
+            if (typeof API !== 'undefined') {
+                addResult(
+                    'Test 4: API Module Check',
+                    'success',
+                    'API module is loaded',
+                    {
+                        baseUrl: API.baseUrl,
+                        methods: Object.keys(API).filter(k => typeof API[k] === 'function')
+                    }
+                );
+
+                // Test 5: Use API module
+                try {
+                    addResult('Test 5: API.getAllDevices()', 'pending', 'Calling API.getAllDevices()...');
+                    const devices = await API.getAllDevices();
+                    addResult(
+                        'Test 5: API Module Call',
+                        'success',
+                        `Successfully loaded ${devices.length} devices`,
+                        devices.slice(0, 3)
+                    );
+                } catch (error) {
+                    addResult('Test 5: API Module Call', 'error', error.message);
+                }
+            } else {
+                addResult('Test 4: API Module Check', 'error', 'API module not loaded. Check if api.js is loading correctly.');
+            }
+
+            addResult('All Tests Complete', 'success', 'Check results above for any errors.');
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            setTimeout(runAllTests, 500);
+        });
+    </script>
+</body>
+</html>

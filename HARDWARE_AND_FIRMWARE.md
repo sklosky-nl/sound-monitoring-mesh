@@ -212,10 +212,10 @@ Navigate to: **Sound Level Sensor Configuration**
 - Backend must have matching key in `.env` as `SHARED_API_KEY` or `API_KEY`
 
 **Production Environment (Nova Labs):**
-- **WiFi SSID**: `YOUR_WORKSHOP_WIFI`
-- **WiFi Password**: `YOUR_WORKSHOP_PASSWORD`
-- **Server URL**: TBD (configure when server is set up)
-- **API Key**: `YOUR_API_KEY_HERE` (or your chosen shared key)
+- **WiFi SSID**: `REDACTED_WORKSHOP_WIFI_SSID`
+- **WiFi Password**: `REDACTED`
+- **Server URL**: `http://xibo.space.nova-labs.org/api/sound`
+- **API Key**: `REDACTED`
 
 ⚠️ **Security Note**: These credentials are for the isolated IoT network at Nova Labs. The shared API key approach is suitable for trusted, internal networks only.
 

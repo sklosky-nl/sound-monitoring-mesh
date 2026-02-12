@@ -2,8 +2,20 @@
  * API Service - handles all backend API calls
  */
 
+// Clear localStorage if it has wrong API URL (migration helper)
+(function() {
+    const cachedUrl = localStorage.getItem('apiUrl');
+    const currentHostname = window.location.hostname;
+    
+    // If we're on production and localStorage has localhost URL, clear it
+    if (currentHostname !== 'localhost' && cachedUrl && cachedUrl.includes('localhost')) {
+        console.log('Clearing cached localhost API URL from localStorage');
+        localStorage.removeItem('apiUrl');
+    }
+})();
+
 const API = {
-    baseUrl: localStorage.getItem('apiUrl') || 'http://localhost:3000',
+    baseUrl: localStorage.getItem('apiUrl') || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : '/api/sound'),
 
     setBaseUrl(url) {
         this.baseUrl = url;

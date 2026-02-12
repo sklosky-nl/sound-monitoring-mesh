@@ -30,7 +30,7 @@
 #include "esp_https_ota.h"
 
 // Firmware Version
-#define FIRMWARE_VERSION "1.1.1"
+#define FIRMWARE_VERSION "1.2.1-prod"
 
 // Configuration
 // Device ID will be set dynamically based on MAC address
