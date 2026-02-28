@@ -261,13 +261,32 @@
     gap: 10px;
 }
 
+.timeline-track {
+    position: relative;
+    width: 100%;
+    height: 8px;
+}
+
+.timeline-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    pointer-events: none;
+}
+
 #timelineSlider {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 8px;
     border-radius: 4px;
     outline: none;
     -webkit-appearance: none;
-    background: var(--border-color);
+    background: transparent;
 }
 
 #timelineSlider::-webkit-slider-thumb {

@@ -20,7 +20,8 @@ const TriangulationState = {
     isDragging: false,
     materialPresets: {},
     playbackController: null,
-    isPlaybackMode: false
+    isPlaybackMode: false,
+    playbackMeasurements: null
 };
 
 // Initialize triangulation when tab is loaded
@@ -202,26 +203,113 @@ function drawSensor(sensor, offsetX, offsetY, scale) {
     const x = offsetX + sensor.position.x * scale;
     const y = offsetY - sensor.position.y * scale; // Flip Y for canvas coords
 
-    // Draw sensor circle
-    ctx.fillStyle = '#4CAF50';
-    ctx.beginPath();
-    ctx.arc(x, y, 8, 0, 2 * Math.PI);
-    ctx.fill();
-    
-    // Draw border
-    ctx.strokeStyle = '#2E7D32';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    // Check if we have playback measurement data for this sensor
+    let dbLevel = null;
+    if (TriangulationState.isPlaybackMode && TriangulationState.playbackMeasurements) {
+        const measurement = TriangulationState.playbackMeasurements.find(
+            m => m.device_id === sensor.device_id
+        );
+        if (measurement) {
+            dbLevel = measurement.db_level;
+        }
+    }
+
+    // Draw colored circle based on dB level if available
+    if (dbLevel !== null) {
+        let color, radius;
+        
+        // Use color config if available
+        if (typeof SoundLevelColors !== 'undefined') {
+            const visualization = SoundLevelColors.getSensorVisualization(dbLevel);
+            color = visualization.color;
+            radius = visualization.radius;
+        } else {
+            // Fallback to old implementation
+            const result = getSensorVisualization(dbLevel);
+            color = result.color;
+            radius = result.radius;
+        }
+        
+        // Draw measurement radius (pulsing circle)
+        ctx.fillStyle = color + '40'; // Add transparency
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw sensor circle with color
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw border
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw dB level
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 11px Arial';
+        ctx.fillText(`${dbLevel.toFixed(1)} dB`, x + 15, y + 4);
+    } else {
+        // Draw default sensor circle
+        ctx.fillStyle = '#4CAF50';
+        ctx.beginPath();
+        ctx.arc(x, y, 8, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw border
+        ctx.strokeStyle = '#2E7D32';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
 
     // Draw label
     ctx.fillStyle = '#000';
     ctx.font = 'bold 12px Arial';
-    ctx.fillText(sensor.nickname || sensor.name || sensor.device_id, x + 12, y + 4);
+    ctx.fillText(sensor.nickname || sensor.name || sensor.device_id, x + 12, y + (dbLevel !== null ? 18 : 4));
 
     // Draw coordinates
     ctx.font = '10px Arial';
     ctx.fillStyle = '#666';
-    ctx.fillText(`(${sensor.position.x.toFixed(1)}, ${sensor.position.y.toFixed(1)})`, x + 12, y + 16);
+    ctx.fillText(`(${sensor.position.x.toFixed(1)}, ${sensor.position.y.toFixed(1)})`, x + 12, y + (dbLevel !== null ? 30 : 16));
+}
+
+function getSensorVisualization(dbLevel) {
+    // Map dB level to color (green -> yellow -> orange -> red)
+    // Typical range: 30-100 dB
+    const minDb = 30;
+    const maxDb = 100;
+    const normalized = Math.max(0, Math.min(1, (dbLevel - minDb) / (maxDb - minDb)));
+    
+    let color;
+    if (normalized < 0.33) {
+        // Green to Yellow
+        const t = normalized / 0.33;
+        const r = Math.floor(76 + (255 - 76) * t);
+        const g = Math.floor(175 + (235 - 175) * t);
+        const b = Math.floor(80 + (59 - 80) * t);
+        color = `rgb(${r}, ${g}, ${b})`;
+    } else if (normalized < 0.66) {
+        // Yellow to Orange
+        const t = (normalized - 0.33) / 0.33;
+        const r = 255;
+        const g = Math.floor(235 - (235 - 152) * t);
+        const b = Math.floor(59 - (59 - 0) * t);
+        color = `rgb(${r}, ${g}, ${b})`;
+    } else {
+        // Orange to Red
+        const t = (normalized - 0.66) / 0.34;
+        const r = 255;
+        const g = Math.floor(152 - 152 * t);
+        const b = 0;
+        color = `rgb(${r}, ${g}, ${b})`;
+    }
+    
+    // Radius grows with dB level (15-40 pixels)
+    const radius = 15 + (normalized * 25);
+    
+    return { color, radius };
 }
 
 // Draw a barrier on the map
@@ -871,6 +959,7 @@ async function enablePlaybackMode() {
             TriangulationState.playbackController.onDataLoad = updatePlaybackData;
             TriangulationState.playbackController.onPlayStateChange = updatePlaybackPlayButton;
             TriangulationState.playbackController.onRangeUpdate = updatePlaybackDateInputs;
+            TriangulationState.playbackController.onAvailabilityUpdate = renderTimelineAvailability;
             
             // Initialize playback controls
             setupPlaybackControls();
@@ -899,6 +988,7 @@ async function enablePlaybackMode() {
 function exitPlaybackMode() {
     document.getElementById('playbackSection').style.display = 'none';
     TriangulationState.isPlaybackMode = false;
+    TriangulationState.playbackMeasurements = null;
     
     if (TriangulationState.playbackController) {
         TriangulationState.playbackController.pause();
@@ -908,8 +998,9 @@ function exitPlaybackMode() {
     document.getElementById('timeRangeSelect').disabled = false;
     document.getElementById('triangulateNowBtn').disabled = false;
     
-    // Reload live data
+    // Reload live data and redraw map
     loadRecentSources();
+    drawMap();
     
     console.log('Playback mode exited');
 }
@@ -985,9 +1076,20 @@ function setupPlaybackControls() {
             e.target.classList.add('active');
         });
     });
+    
+    // Redraw timeline canvas on window resize
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (TriangulationState.playbackController && TriangulationState.playbackController.availabilityData) {
+                renderTimelineAvailability(TriangulationState.playbackController.availabilityData);
+            }
+        }, 250);
+    });
 }
 
-function loadPlaybackTimeRange() {
+async function loadPlaybackTimeRange() {
     const startDate = document.getElementById('playbackStartDate').value;
     const startTime = document.getElementById('playbackStartTime').value;
     const endDate = document.getElementById('playbackEndDate').value;
@@ -1006,16 +1108,43 @@ function loadPlaybackTimeRange() {
         return;
     }
     
-    // Update playback controller time range
-    TriangulationState.playbackController.startTime = start;
-    TriangulationState.playbackController.endTime = end;
-    TriangulationState.playbackController.currentTime = new Date(start);
+    // Show loading indicator
+    const loadBtn = document.getElementById('loadPlaybackDataBtn');
+    const originalText = loadBtn.textContent;
+    loadBtn.textContent = 'Loading...';
+    loadBtn.disabled = true;
     
-    // Clear cache and reload
-    TriangulationState.playbackController.clearCache();
-    TriangulationState.playbackController.updateCurrentFrame();
-    
-    console.log(`Loaded playback range: ${start.toISOString()} to ${end.toISOString()}`);
+    try {
+        // Update playback controller time range
+        TriangulationState.playbackController.startTime = start;
+        TriangulationState.playbackController.endTime = end;
+        TriangulationState.playbackController.currentTime = new Date(start);
+        
+        // Clear cache
+        TriangulationState.playbackController.clearCache();
+        
+        // Reload availability map for new time range
+        await TriangulationState.playbackController.loadAvailabilityMap();
+        
+        // Update timeline slider and display
+        updatePlaybackTime(start);
+        const duration = end.getTime() - start.getTime();
+        document.getElementById('durationDisplay').textContent = formatPlaybackDuration(duration);
+        
+        // Reset timeline slider to start
+        document.getElementById('timelineSlider').value = 0;
+        
+        // Load initial frame
+        await TriangulationState.playbackController.updateCurrentFrame();
+        
+        console.log(`Loaded playback range: ${start.toISOString()} to ${end.toISOString()}`);
+    } catch (error) {
+        console.error('Error loading playback time range:', error);
+        alert('Failed to load time range: ' + error.message);
+    } finally {
+        loadBtn.textContent = originalText;
+        loadBtn.disabled = false;
+    }
 }
 
 function updatePlaybackTime(time) {
@@ -1028,6 +1157,12 @@ function updatePlaybackTime(time) {
 }
 
 function updatePlaybackData(data) {
+    // Store measurement data for visualization
+    if (data.measurements) {
+        TriangulationState.playbackMeasurements = data.measurements;
+        console.log(`Playback: ${data.measurements.length} measurements loaded`);
+    }
+    
     // Update map with historical data
     if (data.deviceStates) {
         // Update sensor states
@@ -1095,5 +1230,52 @@ function formatPlaybackDuration(ms) {
     if (hours > 0) return `${hours}h ${minutes % 60}m`;
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
     return `${seconds}s`;
+}
+
+function renderTimelineAvailability(availabilityData) {
+    const canvas = document.getElementById('timelineCanvas');
+    if (!canvas) {
+        console.error('Timeline canvas not found');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    
+    // Set canvas size to match the timeline track
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw background (lowlight - no data)
+    ctx.fillStyle = 'rgba(200, 200, 200, 0.3)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw data availability bars
+    const barWidth = canvas.width / availabilityData.length;
+    
+    for (let i = 0; i < availabilityData.length; i++) {
+        const availability = availabilityData[i];
+        
+        if (availability > 0) {
+            // Highlight areas with data - stronger color for more data
+            const alpha = 0.3 + (availability * 0.5); // 0.3 to 0.8
+            ctx.fillStyle = `rgba(74, 144, 226, ${alpha})`;
+            
+            const x = i * barWidth;
+            ctx.fillRect(x, 0, barWidth + 1, canvas.height); // +1 to avoid gaps
+        }
+    }
+    
+    // Add rounded corners effect
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 4);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    
+    console.log('Timeline availability rendered with', availabilityData.length, 'data points');
 }
 

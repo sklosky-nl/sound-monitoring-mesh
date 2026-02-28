@@ -35,12 +35,16 @@ class Firmware {
         
         // Sort by version (semantic versioning) and get the latest
         versions.sort((a, b) => {
-            const aVer = a.version.split('.').map(Number);
-            const bVer = b.version.split('.').map(Number);
+            // Strip any suffix (e.g., "-prod", "-alpha") before comparing
+            const cleanVersion = (v) => v.split('-')[0];
+            const aVer = cleanVersion(a.version).split('.').map(Number);
+            const bVer = cleanVersion(b.version).split('.').map(Number);
             
-            for (let i = 0; i < 3; i++) {
-                if (aVer[i] > bVer[i]) return -1;
-                if (aVer[i] < bVer[i]) return 1;
+            for (let i = 0; i < Math.max(aVer.length, bVer.length); i++) {
+                const aVal = aVer[i] || 0;
+                const bVal = bVer[i] || 0;
+                if (aVal > bVal) return -1;
+                if (aVal < bVal) return 1;
             }
             return 0;
         });
@@ -96,12 +100,17 @@ class Firmware {
 
     // Compare two semantic versions
     compareVersions(v1, v2) {
-        const v1Parts = v1.split('.').map(Number);
-        const v2Parts = v2.split('.').map(Number);
+        // Strip any suffix (e.g., "-prod", "-alpha") before comparing
+        const cleanVersion = (v) => v.split('-')[0];
         
-        for (let i = 0; i < 3; i++) {
-            if (v1Parts[i] > v2Parts[i]) return 1;
-            if (v1Parts[i] < v2Parts[i]) return -1;
+        const v1Parts = cleanVersion(v1).split('.').map(Number);
+        const v2Parts = cleanVersion(v2).split('.').map(Number);
+        
+        for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
+            const val1 = v1Parts[i] || 0;
+            const val2 = v2Parts[i] || 0;
+            if (val1 > val2) return 1;
+            if (val1 < val2) return -1;
         }
         return 0;
     }

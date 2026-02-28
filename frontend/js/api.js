@@ -57,6 +57,11 @@ const API = {
         return this.request('/health');
     },
 
+    // System versions
+    async getSystemVersion() {
+        return this.request('/api/version');
+    },
+
     // Device endpoints
     async getAllDevices() {
         return this.request('/api/devices');

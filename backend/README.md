@@ -65,9 +65,9 @@ DATA_RETENTION_DAYS=7
 
 # API Configuration - Shared Key Approach
 # All devices use this SAME API key (must match firmware CONFIG_API_KEY)
-SHARED_API_KEY=REDACTED
+SHARED_API_KEY=<your-api-key>  # see CREDENTIALS.local
 # Legacy alias (SHARED_API_KEY takes precedence)
-API_KEY=REDACTED
+API_KEY=<your-api-key>  # see CREDENTIALS.local
 
 # Logging
 LOG_LEVEL=info

@@ -25,6 +25,8 @@ const State = {
     refreshInterval: null
 };
 
+const FRONTEND_VERSION = '2.1.0';
+
 // Helper function to format date for datetime-local input
 function formatDateTimeLocal(date) {
     const year = date.getFullYear();
@@ -38,15 +40,32 @@ function formatDateTimeLocal(date) {
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async () => {
+    // Set Grafana link based on environment
+    const grafanaLink = document.getElementById('grafanaLink');
+    if (grafanaLink) {
+        const grafanaUrl = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3001' 
+            : 'http://xibo.space.nova-labs.org:3001';
+        grafanaLink.href = grafanaUrl;
+    }
+    
     initTabs();
     initModals();
     initEventListeners();
+    
+    // Load color configuration
+    if (typeof SoundLevelColors !== 'undefined') {
+        await SoundLevelColors.load();
+    }
     
     // Load initial data
     await loadDevices();
     
     // Start auto-refresh for dashboard
     startAutoRefresh();
+    
+    // Initialize settings
+    initSettings();
 });
 
 // Tab navigation
@@ -260,12 +279,20 @@ function createDeviceCard(device, latest) {
     card.className = 'device-card';
 
     const dbLevel = latest ? latest.db_level.toFixed(1) : '--';
+    const dbPeak = latest && latest.db_level_peak ? latest.db_level_peak.toFixed(1) : '--';
     const timestamp = latest ? new Date(latest.timestamp).toLocaleTimeString() : '--';
     
-    // Determine level color
-    let levelClass = 'low';
-    if (latest && latest.db_level > 95) levelClass = 'high';
-    else if (latest && latest.db_level >= 80) levelClass = 'medium';
+    // Determine level color using color config based on PEAK level for alerts
+    let levelClass = 'green';
+    const levelForColorClass = latest && latest.db_level_peak ? latest.db_level_peak : (latest ? latest.db_level : 0);
+    if (typeof SoundLevelColors !== 'undefined' && latest) {
+        levelClass = SoundLevelColors.getClass(levelForColorClass);
+    } else {
+        // Fallback for legacy behavior
+        if (levelForColorClass > 95) levelClass = 'high';
+        else if (levelForColorClass >= 80) levelClass = 'medium';
+        else levelClass = 'low';
+    }
 
     // Get frequency band config from device
     const bandConfig = device.frequency_bands || [];
@@ -460,7 +487,7 @@ function displayHistory(measurements) {
             <div class="measurement-item">
                 <div class="measurement-header">
                     <span class="time">${time}</span>
-                    <span class="level"><strong>Overall: ${m.db_level.toFixed(1)} dB</strong></span>
+                    <span class="level"><strong>Avg: ${m.db_level.toFixed(1)} dB</strong>${m.db_level_peak ? ` | <strong style="color: #e74c3c;">Peak: ${m.db_level_peak.toFixed(1)} dB</strong>` : ''}</span>
                 </div>
                 <div class="bands-inline">
                     ${bandsHtml}
@@ -894,4 +921,155 @@ window.saveFrequencyConfig = async function(deviceId, bandCount) {
     } catch (error) {
         alert(`Failed to update frequency bands: ${error.message}`);
     }
+}
+
+// Initialize settings tab
+function initSettings() {
+    // Load current thresholds into UI
+    loadThresholdSettings();
+
+    // Load version info for About section
+    updateVersionDisplay();
+    
+    // Save thresholds button
+    document.getElementById('saveThresholds')?.addEventListener('click', saveThresholdSettings);
+    
+    // Reset thresholds button
+    document.getElementById('resetThresholds')?.addEventListener('click', resetThresholdSettings);
+}
+
+async function updateVersionDisplay() {
+    const frontendVersionEl = document.getElementById('frontendVersion');
+    const backendVersionEl = document.getElementById('backendVersion');
+    const firmwareVersionEl = document.getElementById('firmwareVersion');
+
+    if (frontendVersionEl) {
+        frontendVersionEl.textContent = FRONTEND_VERSION;
+    }
+
+    if (backendVersionEl) {
+        backendVersionEl.textContent = 'Loading...';
+    }
+
+    if (firmwareVersionEl) {
+        firmwareVersionEl.textContent = 'Loading...';
+    }
+
+    try {
+        const versionInfo = await API.getSystemVersion();
+        if (backendVersionEl) {
+            backendVersionEl.textContent = versionInfo.backend?.version || 'Unknown';
+        }
+        if (firmwareVersionEl) {
+            firmwareVersionEl.textContent = versionInfo.firmware?.version || 'Unknown';
+        }
+    } catch (error) {
+        if (backendVersionEl) {
+            backendVersionEl.textContent = 'Unknown';
+        }
+        if (firmwareVersionEl) {
+            firmwareVersionEl.textContent = 'Unknown';
+        }
+        console.warn('Failed to load system version info:', error.message);
+    }
+}
+
+async function loadThresholdSettings() {
+    if (typeof SoundLevelColors === 'undefined') return;
+    
+    const thresholds = SoundLevelColors.getThresholds();
+    
+    document.getElementById('greenMin').value = thresholds.green.min;
+    document.getElementById('greenMax').value = thresholds.green.max;
+    document.getElementById('yellowMin').value = thresholds.yellow.min;
+    document.getElementById('yellowMax').value = thresholds.yellow.max;
+    document.getElementById('orangeMin').value = thresholds.orange.min;
+    document.getElementById('orangeMax').value = thresholds.orange.max;
+    document.getElementById('redMin').value = thresholds.red.min;
+    document.getElementById('redMax').value = thresholds.red.max;
+}
+
+async function saveThresholdSettings() {
+    if (typeof SoundLevelColors === 'undefined') return;
+    
+    const resultDiv = document.getElementById('thresholdResult');
+    
+    try {
+        // Update config object
+        SoundLevelColors.setThreshold('green', 'max', document.getElementById('greenMax').value);
+        SoundLevelColors.setThreshold('yellow', 'min', document.getElementById('greenMax').value);
+        SoundLevelColors.setThreshold('yellow', 'max', document.getElementById('yellowMax').value);
+        SoundLevelColors.setThreshold('orange', 'min', document.getElementById('yellowMax').value);
+        SoundLevelColors.setThreshold('orange', 'max', document.getElementById('orangeMax').value);
+        SoundLevelColors.setThreshold('red', 'min', document.getElementById('orangeMax').value);
+        SoundLevelColors.setThreshold('red', 'max', document.getElementById('redMax').value);
+        
+        // Save to backend
+        const success = await SoundLevelColors.save();
+        
+        if (success) {
+            resultDiv.textContent = 'Thresholds saved successfully! Changes will apply to all displays.';
+            resultDiv.className = 'result-message success';
+            
+            // Reload threshold inputs to show updated min values
+            loadThresholdSettings();
+            
+            // Refresh dashboard to show new colors
+            await loadDevices();
+        } else {
+            throw new Error('Failed to save');
+        }
+    } catch (error) {
+        resultDiv.textContent = 'Error saving thresholds: ' + error.message;
+        resultDiv.className = 'result-message error';
+    }
+    
+    // Clear message after 5 seconds
+    setTimeout(() => {
+        resultDiv.textContent = '';
+        resultDiv.className = 'result-message';
+    }, 5000);
+}
+
+async function resetThresholdSettings() {
+    if (typeof SoundLevelColors === 'undefined') return;
+    
+    if (!confirm('Reset all thresholds to default values?')) return;
+    
+    const resultDiv = document.getElementById('thresholdResult');
+    
+    try {
+        // Set default values
+        SoundLevelColors.thresholds = {
+            green: { min: 0, max: 50, label: 'Quiet' },
+            yellow: { min: 50, max: 65, label: 'Moderate' },
+            orange: { min: 65, max: 80, label: 'Loud' },
+            red: { min: 80, max: 120, label: 'Very Loud' }
+        };
+        
+        // Save to backend
+        const success = await SoundLevelColors.save();
+        
+        if (success) {
+            resultDiv.textContent = 'Thresholds reset to defaults!';
+            resultDiv.className = 'result-message success';
+            
+            // Reload UI
+            loadThresholdSettings();
+            
+            // Refresh dashboard
+            await loadDevices();
+        } else {
+            throw new Error('Failed to reset');
+        }
+    } catch (error) {
+        resultDiv.textContent = 'Error resetting thresholds: ' + error.message;
+        resultDiv.className = 'result-message error';
+    }
+    
+    // Clear message after 5 seconds
+    setTimeout(() => {
+        resultDiv.textContent = '';
+        resultDiv.className = 'result-message';
+    }, 5000);
 }

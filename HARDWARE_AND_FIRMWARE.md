@@ -213,9 +213,9 @@ Navigate to: **Sound Level Sensor Configuration**
 
 **Production Environment (Nova Labs):**
 - **WiFi SSID**: `REDACTED_WORKSHOP_WIFI_SSID`
-- **WiFi Password**: `REDACTED`
+- **WiFi Password**: `<see CREDENTIALS.local>`
 - **Server URL**: `http://xibo.space.nova-labs.org/api/sound`
-- **API Key**: `REDACTED`
+- **API Key**: `<see CREDENTIALS.local>`
 
 ⚠️ **Security Note**: These credentials are for the isolated IoT network at Nova Labs. The shared API key approach is suitable for trusted, internal networks only.
 

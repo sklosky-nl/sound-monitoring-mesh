@@ -31,6 +31,14 @@
       "releaseDate": "2026-02-11T18:01:00.000Z",
       "description": "Production environment (Nova Labs IoT WiFi + production backend)",
       "sha256": "8244590ac73e9f4cad0022e829559f73af8441025de8fefb9f3a37381369d434"
+    },
+    {
+      "version": "2.1.0-prod",
+      "filename": "sound-sensor-2.1.0-prod.bin",
+      "size": 1062880,
+      "releaseDate": "2026-02-12T00:00:00.000Z",
+      "description": "CRITICAL UPDATE: Continuous sampling with peak detection - Captures 100% of sound instead of 6.4%. Reports both RMS average and peak dB values. Fixes issue where loud noise events were being missed.",
+      "sha256": "961f3c3a5b8a682cc3a3939853b78cae7c0072680515afdc4bd66af8f9e45796"
     }
   ]
 }

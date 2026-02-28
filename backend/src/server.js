@@ -23,6 +23,8 @@ const sourceRoutes = require('./routes/sources');
 const triangulationRoutes = require('./routes/triangulation');
 const labelRoutes = require('./routes/labels');
 const firmwareRoutes = require('./routes/firmware');
+const grafanaRoutes = require('./routes/grafana');
+const versionRoutes = require('./routes/version');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,6 +72,8 @@ app.use('/api/sources', sourceRoutes);
 app.use('/api/triangulation', triangulationRoutes);
 app.use('/api/labels', labelRoutes);
 app.use('/api/firmware', firmwareRoutes);
+app.use('/api/grafana', grafanaRoutes);
+app.use('/api/version', versionRoutes);
 // Legacy device registration endpoint (for backward compatibility)
 // MUST be last to avoid catching other /api/* routes
 app.use('/api', deviceRoutes);

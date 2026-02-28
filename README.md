@@ -33,12 +33,12 @@ A distributed sound monitoring system consisting of ESP32-C3-based WiFi sensor d
 ### Production Environment (Nova Labs)
 - 📍 Location: Nova Labs makerspace
 - 📡 WiFi Network: REDACTED_WORKSHOP_WIFI_SSID (isolated IoT network)
-- 🔒 Network Password: REDACTED
+- 🔒 Network Password: `<see CREDENTIALS.local>`
 - 💻 Server: Ubuntu 20.04.2 LTS (xibo.space.nova-labs.org)
 - 📱 Deployment: 9 ESP32-C3 sensors (8 active, 1 offline)
 - 🌐 Backend URL: http://xibo.space.nova-labs.org/api/sound
 - 🖥️ Frontend URL: http://xibo.space.nova-labs.org/sound/
-- 🔑 **Shared API Key**: REDACTED
+- 🔑 **Shared API Key**: `<see CREDENTIALS.local>`
 - 📦 **Current Firmware**: v1.2.1-prod
   - Example: `YOUR_API_KEY_HERE`
   - Set in firmware via `CONFIG_API_KEY` (sdkconfig)

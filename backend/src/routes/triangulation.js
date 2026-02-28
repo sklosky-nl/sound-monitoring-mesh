@@ -474,4 +474,69 @@ router.get('/playback/range', async (req, res) => {
     }
 });
 
+// Get data availability map for timeline visualization
+router.get('/playback/availability', async (req, res) => {
+    try {
+        const { startTime, endTime, resolution = 100 } = req.query;
+        
+        if (!startTime || !endTime) {
+            return res.status(400).json({ error: 'startTime and endTime required' });
+        }
+        
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        const totalMs = end - start;
+        const blockMs = totalMs / resolution;
+        
+        const devices = await DeviceModel.getAllDevices();
+        const availabilityMap = new Array(resolution).fill(0);
+        
+        // For each device, check which time blocks have data
+        for (const device of devices) {
+            const allDates = await MeasurementModel.getAvailableDates(device.device_id);
+            
+            for (const dateStr of allDates) {
+                const date = new Date(dateStr);
+                
+                // Skip if outside range
+                if (date < start || date > end) continue;
+                
+                // Get measurements for this date
+                const measurements = await MeasurementModel.getMeasurements(
+                    device.device_id,
+                    dateStr,
+                    dateStr
+                );
+                
+                // Mark time blocks that have measurements
+                for (const measurement of measurements) {
+                    const timestamp = new Date(measurement.timestamp);
+                    if (timestamp >= start && timestamp <= end) {
+                        const blockIndex = Math.floor((timestamp - start) / blockMs);
+                        if (blockIndex >= 0 && blockIndex < resolution) {
+                            availabilityMap[blockIndex]++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Normalize to 0-1 based on max device count
+        const maxCount = Math.max(...availabilityMap, 1);
+        const normalizedMap = availabilityMap.map(count => count / maxCount);
+        
+        res.json({
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+            resolution,
+            availability: normalizedMap,
+            deviceCount: devices.length
+        });
+        
+    } catch (error) {
+        logger.error('Error getting data availability:', error);
+        res.status(500).json({ error: 'Failed to get data availability' });
+    }
+});
+
 module.exports = router;

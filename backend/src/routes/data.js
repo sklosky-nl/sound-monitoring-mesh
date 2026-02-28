@@ -46,7 +46,7 @@ async function verifyApiKey(req, res, next) {
 // Submit measurement data
 router.post('/measurements', verifyApiKey, async (req, res) => {
     try {
-        const { device_id, timestamp, db_level, db_level_raw, frequency_bands, firmware_version } = req.body;
+        const { device_id, timestamp, db_level, db_level_raw, db_level_peak, db_level_peak_raw, frequency_bands, firmware_version } = req.body;
 
         if (!device_id || !timestamp || db_level === undefined) {
             return res.status(400).json({
@@ -60,6 +60,8 @@ router.post('/measurements', verifyApiKey, async (req, res) => {
             timestamp,
             db_level,
             db_level_raw: db_level_raw || db_level,
+            db_level_peak: db_level_peak,
+            db_level_peak_raw: db_level_peak_raw || db_level_peak,
             frequency_bands: frequency_bands || []
         });
 
@@ -157,9 +159,9 @@ router.get('/export/csv/:deviceId', async (req, res) => {
         }
 
         // Generate CSV
-        let csv = 'Timestamp,Device ID,dB Level,dB Level (Raw)\n';
+        let csv = 'Timestamp,Device ID,dB Level (Avg),dB Level (Raw),dB Level (Peak),dB Level Peak (Raw)\n';
         measurements.forEach(m => {
-            csv += `${m.timestamp},${m.device_id},${m.db_level},${m.db_level_raw || m.db_level}\n`;
+            csv += `${m.timestamp},${m.device_id},${m.db_level},${m.db_level_raw || m.db_level},${m.db_level_peak || ''},${m.db_level_peak_raw || ''}\n`;
         });
 
         res.setHeader('Content-Type', 'text/csv');

@@ -1,6 +1,6 @@
 {
   "name": "sound-level-backend",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Backend API server for Sound Level Mesh System",
   "main": "src/server.js",
   "scripts": {

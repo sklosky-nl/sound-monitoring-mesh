@@ -1,0 +1,24 @@
+{
+  "thresholds": {
+    "green": {
+      "min": 0,
+      "max": 77,
+      "label": "Quiet"
+    },
+    "yellow": {
+      "min": 77,
+      "max": 90,
+      "label": "Moderate"
+    },
+    "orange": {
+      "min": 90,
+      "max": 97,
+      "label": "Loud"
+    },
+    "red": {
+      "min": 97,
+      "max": 200,
+      "label": "Very Loud"
+    }
+  }
+}

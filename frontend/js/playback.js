@@ -14,12 +14,14 @@ class PlaybackController {
         this.playbackInterval = null;
         this.frameIntervalMs = 100; // Update every 100ms
         this.dataCache = new Map();
+        this.availabilityData = null;
         
         // Callbacks
         this.onTimeUpdate = null;
         this.onDataLoad = null;
         this.onPlayStateChange = null;
         this.onRangeUpdate = null;
+        this.onAvailabilityUpdate = null;
     }
 
     async initialize() {
@@ -44,11 +46,32 @@ class PlaybackController {
                 });
             }
             
+            // Load data availability map
+            await this.loadAvailabilityMap();
+            
             console.log(`Playback range: ${this.startTime.toISOString()} to ${this.endTime.toISOString()}`);
             return true;
         } catch (error) {
             console.error('Failed to initialize playback:', error);
             return false;
+        }
+    }
+
+    async loadAvailabilityMap() {
+        try {
+            const response = await API.request(
+                `/api/triangulation/playback/availability?startTime=${this.startTime.toISOString()}&endTime=${this.endTime.toISOString()}&resolution=200`
+            );
+            
+            this.availabilityData = response.availability;
+            
+            if (this.onAvailabilityUpdate) {
+                this.onAvailabilityUpdate(this.availabilityData);
+            }
+            
+            console.log('Availability map loaded with', this.availabilityData.length, 'data points');
+        } catch (error) {
+            console.error('Failed to load availability map:', error);
         }
     }
 

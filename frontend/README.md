@@ -91,10 +91,13 @@ lsof -ti :8080 | xargs kill -9 2>/dev/null
 - API URL is automatically set to the same origin (http://localhost:3000)
 - No configuration needed for normal use
 
+**Production Configuration (Nova Labs):**
+- Set the Backend API URL to http://xibo.space.nova-labs.org/api/sound
+
 **Manual Configuration (if needed):**
 1. Open the frontend in your browser
 2. Go to the "Settings" tab
-3. Set the Backend API URL (e.g., `http://localhost:3000`)
+3. Set the Backend API URL (e.g., `http://localhost:3000` or `http://xibo.space.nova-labs.org/api/sound`)
 4. Click "Save Configuration"
 
 The setting is saved to browser localStorage and persists across sessions.

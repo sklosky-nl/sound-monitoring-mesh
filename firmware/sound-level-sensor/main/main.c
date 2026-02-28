@@ -28,9 +28,10 @@
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+#include "driver/gpio.h"
 
 // Firmware Version
-#define FIRMWARE_VERSION "1.2.1-prod"
+#define FIRMWARE_VERSION "2.1.1-prod"
 
 // Configuration
 // Device ID will be set dynamically based on MAC address
@@ -93,6 +94,12 @@ typedef struct {
 // Calibration offset (configurable from server)
 static float calibration_offset_db = 0.0f;
 
+// Peak tracking for continuous sampling
+static float peak_db_window = 0.0f;
+static float rms_accumulator = 0.0f;
+static int rms_sample_count = 0;
+#define REPORTING_INTERVAL_SAMPLES 78  // ~5 seconds at 64ms per sample (1024 samples @ 16kHz)
+
 // WiFi event group
 static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
@@ -136,9 +143,11 @@ static void init_i2s(void);
 static void init_sntp(void);
 static void audio_sampling_task(void *pvParameters);
 static float calculate_db_level(float* magnitude, int size);
+static float calculate_dbfs(float* samples, int size);
+static float calculate_dbfs_from_i2s(const int32_t* buffer, int size, int mode, int32_t* peak_abs_out);
 static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sample_rate);
 static void apply_hamming_window(float* samples, int size);
-static esp_err_t send_measurement_data(float db_level, freq_band_t* bands, int num_bands);
+static esp_err_t send_measurement_data(float db_level, float db_peak, freq_band_t* bands, int num_bands);
 static void ota_task(void *pvParameters);
 static esp_err_t check_and_perform_ota_update(void);
 
@@ -248,7 +257,7 @@ static void init_i2s(void)
 
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(I2S_SAMPLE_RATE),
-        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
             .bclk = I2S_BCK_PIN,
@@ -262,6 +271,9 @@ static void init_i2s(void)
             },
         },
     };
+
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
 
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_handle, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(rx_handle));
@@ -477,47 +489,134 @@ static float calculate_a_weighting(float freq)
     return a_weight;
 }
 
-// Calculate overall dB level from FFT magnitude with A-weighting
-static float calculate_db_level(float* magnitude, int size)
+// Calculate overall dB SPL from time-domain RMS
+static float calculate_db_level(float* samples, int size)
 {
-    float sum = 0;
-    float freq_resolution = (float)I2S_SAMPLE_RATE / FFT_SIZE;
-    
-    for (int i = 1; i < size / 2; i++) {  // Skip DC component
-        // Calculate frequency for this bin
-        float freq = i * freq_resolution;
-        
-        // Apply A-weighting
-        float a_weight_db = calculate_a_weighting(freq);
-        float a_weight_linear = powf(10.0f, a_weight_db / 20.0f);
-        
-        // Apply weighting to magnitude
-        float weighted_magnitude = magnitude[i] * a_weight_linear;
-        sum += weighted_magnitude * weighted_magnitude;
+    float mean = 0.0f;
+    for (int i = 0; i < size; i++) {
+        mean += samples[i];
     }
-    float rms = sqrtf(sum / (size / 2));
-    
+    mean /= (float)size;
+
+    float sum = 0.0f;
+    for (int i = 0; i < size; i++) {
+        float centered = samples[i] - mean;
+        sum += centered * centered;
+    }
+
+    float rms = sqrtf(sum / (float)size);
+
     // Prevent log(0)
     if (rms < 1e-10f) {
         rms = 1e-10f;
     }
-    
-    // Convert RMS to dB SPL using INMP441 calibration
-    // INMP441: -26 dBFS corresponds to 94 dB SPL (1 Pa reference)
-    // Full scale (RMS=1.0) would be 94 - (-26) = 120 dB SPL
-    // Formula: dB_SPL = 94 + 20*log10(rms/0.0501) where 0.0501 = 10^(-26/20)
-    // Simplified: dB_SPL = 94 + 20*log10(rms) + 26
-    // BUT the I2S samples seem to be left-shifted, so adjust baseline
-    float db = 94.0f + 20.0f * log10f(rms) - 35.0f;  // Adjusted offset empirically
-    
+
+    // INMP441 calibration:
+    // -26 dBFS corresponds to 94 dB SPL (1 Pa reference)
+    // dB_SPL = 94 + (dBFS - (-26)) = 120 + 20*log10(rms)
+    float db = 120.0f + 20.0f * log10f(rms);
+
     // Apply calibration offset
     db += calibration_offset_db;
-    
+
     // Clamp to reasonable range (30-120 dB SPL)
     if (db < 30.0f) db = 30.0f;
     if (db > 120.0f) db = 120.0f;
-    
+
     return db;
+}
+
+// Calculate raw dBFS from time-domain RMS (no SPL offset)
+static float calculate_dbfs(float* samples, int size)
+{
+    float mean = 0.0f;
+    for (int i = 0; i < size; i++) {
+        mean += samples[i];
+    }
+    mean /= (float)size;
+
+    float sum = 0.0f;
+    for (int i = 0; i < size; i++) {
+        float centered = samples[i] - mean;
+        sum += centered * centered;
+    }
+
+    float rms = sqrtf(sum / (float)size);
+    if (rms < 1e-10f) {
+        rms = 1e-10f;
+    }
+
+    return 20.0f * log10f(rms);
+}
+
+// Calculate raw dBFS from I2S samples with selectable alignment mode
+// mode 0: 32-bit container (MSB-aligned)
+// mode 1: 24-bit right-justified in lower bits
+// mode 2: 24-bit left-justified (shift right by 8)
+static float calculate_dbfs_from_i2s(const int32_t* buffer, int size, int mode, int32_t* peak_abs_out)
+{
+    float mean = 0.0f;
+    float sum = 0.0f;
+    int32_t peak_abs = 0;
+    float scale = 1.0f;
+
+    if (mode == 0) {
+        scale = 2147483648.0f;
+    } else {
+        scale = 8388608.0f;
+    }
+
+    for (int i = 0; i < size; i++) {
+        int32_t raw = buffer[i];
+        int32_t sample = raw;
+
+        if (mode == 1) {
+            sample = raw & 0x00FFFFFF;
+            if (sample & 0x00800000) {
+                sample |= 0xFF000000;
+            }
+        } else if (mode == 2) {
+            sample = raw >> 8;
+        }
+
+        int32_t abs_sample = sample == INT32_MIN ? INT32_MAX : abs(sample);
+        if (abs_sample > peak_abs) {
+            peak_abs = abs_sample;
+        }
+
+        mean += (float)sample / scale;
+    }
+
+    mean /= (float)size;
+
+    for (int i = 0; i < size; i++) {
+        int32_t raw = buffer[i];
+        int32_t sample = raw;
+
+        if (mode == 1) {
+            sample = raw & 0x00FFFFFF;
+            if (sample & 0x00800000) {
+                sample |= 0xFF000000;
+            }
+        } else if (mode == 2) {
+            sample = raw >> 8;
+        }
+
+        float normalized = (float)sample / scale;
+        float centered = normalized - mean;
+        sum += centered * centered;
+    }
+
+    float rms = sqrtf(sum / (float)size);
+    if (rms < 1e-10f) {
+        rms = 1e-10f;
+    }
+
+    if (peak_abs_out) {
+        *peak_abs_out = peak_abs;
+    }
+
+    return 20.0f * log10f(rms);
 }
 
 // Calculate frequency band levels with A-weighting
@@ -663,16 +762,17 @@ static void audio_sampling_task(void *pvParameters)
         return;
     }
     
-    ESP_LOGI(TAG, "Audio sampling task started");
+    ESP_LOGI(TAG, "Audio sampling task started - Continuous sampling mode with peak detection");
     
-    int measurement_count = 0;
+    int sample_count = 0;
+    int config_check_counter = 0;
     
     while (1) {
-        // Periodically refresh configuration (every 100 measurements, ~5 minutes at 5 sec interval)
-        if (measurement_count > 0 && measurement_count % 100 == 0) {
+        // Periodically refresh configuration (every 7800 samples, ~10 minutes)
+        if (config_check_counter > 0 && config_check_counter % 7800 == 0) {
             fetch_configuration();
         }
-        measurement_count++;
+        config_check_counter++;
         
         size_t bytes_read = 0;
         
@@ -687,13 +787,42 @@ static void audio_sampling_task(void *pvParameters)
             continue;
         }
         
-        // Convert I2S data to float and normalize
+        // Convert I2S data to float and normalize (24-bit left-justified in 32-bit slot)
+        int32_t min_sample = INT32_MAX;
+        int32_t max_sample = INT32_MIN;
+        int clip_count = 0;
+        const int32_t clip_threshold = 0x7FFFFF - 8;
         for (int i = 0; i < SAMPLE_BUFFER_SIZE; i++) {
-            // INMP441 is 24-bit left-aligned in 32-bit container
-            samples[i] = (float)(i2s_buffer[i] >> 8) / 8388608.0f;  // Normalize to -1.0 to 1.0
+            int32_t sample = i2s_buffer[i] >> 8;
+            samples[i] = (float)sample / 8388608.0f;  // Normalize to -1.0 to 1.0
+
+            if (sample < min_sample) {
+                min_sample = sample;
+            }
+            if (sample > max_sample) {
+                max_sample = sample;
+            }
+
+            int32_t abs_sample = sample == INT32_MIN ? INT32_MAX : abs(sample);
+            if (abs_sample >= clip_threshold) {
+                clip_count++;
+            }
         }
         
-        // Apply Hamming window
+        // Calculate overall dB level for this sample (time-domain RMS)
+        int32_t peak_abs32 = 0;
+        float dbfs32 = calculate_dbfs_from_i2s(i2s_buffer, SAMPLE_BUFFER_SIZE, 0, &peak_abs32);
+        float db_level = 120.0f + dbfs32 + calibration_offset_db;
+        if (db_level < 30.0f) db_level = 30.0f;
+        if (db_level > 120.0f) db_level = 120.0f;
+
+        float peak_norm = peak_abs32 > 0 ? (float)peak_abs32 / 2147483648.0f : 1e-10f;
+        float peak_dbfs = 20.0f * log10f(peak_norm);
+        float peak_db = 120.0f + peak_dbfs + calibration_offset_db;
+        if (peak_db < 30.0f) peak_db = 30.0f;
+        if (peak_db > 120.0f) peak_db = 120.0f;
+
+        // Apply Hamming window for FFT processing
         apply_hamming_window(samples, SAMPLE_BUFFER_SIZE);
         
         // Prepare FFT input (real and imaginary parts)
@@ -713,24 +842,67 @@ static void audio_sampling_task(void *pvParameters)
             fft_magnitude[i] = sqrtf(real * real + imag * imag);
         }
         
-        // Calculate overall dB level
-        float db_level = calculate_db_level(fft_magnitude, FFT_SIZE);
-        
         // Calculate frequency band levels
         calculate_frequency_bands(fft_magnitude, FFT_SIZE, I2S_SAMPLE_RATE);
         
-        // Log results
-        ESP_LOGI(TAG, "dB Level: %.1f | Band1: %.1f | Band2: %.1f | Band3: %.1f", 
-                 db_level, frequency_bands[0].level, frequency_bands[1].level, frequency_bands[2].level);
+        // Track peak and RMS over the reporting window
+        if (peak_db > peak_db_window) {
+            peak_db_window = peak_db;
+        }
+        rms_accumulator += db_level;
+        rms_sample_count++;
+        sample_count++;
         
-        // Send data to server (every 5 seconds)
-        static int counter = 0;
-        if (++counter >= 5) {
-            counter = 0;
-            send_measurement_data(db_level, frequency_bands, NUM_BANDS);
+        // Log every 10th sample to reduce log spam
+        if (sample_count % 10 == 0) {
+            int32_t raw = i2s_buffer[0];
+            int32_t peak_abs24r = 0;
+            int32_t peak_abs24l = 0;
+            float dbfs24r = calculate_dbfs_from_i2s(i2s_buffer, SAMPLE_BUFFER_SIZE, 1, &peak_abs24r);
+            float dbfs24l = calculate_dbfs_from_i2s(i2s_buffer, SAMPLE_BUFFER_SIZE, 2, &peak_abs24l);
+            int data_high = 0;
+            int bit_ones = 0;
+            int bit_total = 0;
+
+            for (int i = 0; i < 64; i++) {
+                data_high += gpio_get_level(I2S_DATA_PIN);
+            }
+
+            for (int i = 0; i < 64; i++) {
+                uint32_t word = (uint32_t)i2s_buffer[i];
+                bit_ones += __builtin_popcount(word);
+                bit_total += 32;
+            }
+
+            ESP_LOGI(TAG, "Sample %d: %.1f dB | Peak: %.1f dB | dBFS: %.1f | PeakFS: %.1f | Band1: %.1f | Band2: %.1f | Band3: %.1f",
+                     sample_count, db_level, peak_db_window, dbfs32, peak_dbfs,
+                     frequency_bands[0].level, frequency_bands[1].level, frequency_bands[2].level);
+            ESP_LOGI(TAG, "Debug I2S raw0: %ld | peak_abs32: %ld | peak_abs24r: %ld | peak_abs24l: %ld",
+                     (long)raw, (long)peak_abs32, (long)peak_abs24r, (long)peak_abs24l);
+            ESP_LOGI(TAG, "Debug dBFS32: %.1f | dBFS24r: %.1f | dBFS24l: %.1f",
+                     dbfs32, dbfs24r, dbfs24l);
+            ESP_LOGI(TAG, "Debug clip: %d/%d | min: %ld | max: %ld",
+                     clip_count, SAMPLE_BUFFER_SIZE, (long)min_sample, (long)max_sample);
+            ESP_LOGI(TAG, "Debug GPIO data: high %d/64", data_high);
+            ESP_LOGI(TAG, "Debug bit density: %d/%d", bit_ones, bit_total);
         }
         
-        vTaskDelay(pdMS_TO_TICKS(1000));  // Sample every 1 second
+        // Send data to server every ~5 seconds (78 samples * 64ms = ~5 sec)
+        if (sample_count >= REPORTING_INTERVAL_SAMPLES) {
+            float avg_db = rms_accumulator / rms_sample_count;
+            ESP_LOGI(TAG, "Reporting: Avg=%.1f dB, Peak=%.1f dB over %d samples", 
+                     avg_db, peak_db_window, rms_sample_count);
+            send_measurement_data(avg_db, peak_db_window, frequency_bands, NUM_BANDS);
+            
+            // Reset accumulators for next window
+            sample_count = 0;
+            peak_db_window = 0.0f;
+            rms_accumulator = 0.0f;
+            rms_sample_count = 0;
+        }
+
+        // Yield for at least one tick so the idle task can run (prevents WDT trigger)
+        vTaskDelay(1);
     }
     
     free(i2s_buffer);
@@ -760,7 +932,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
 }
 
 // Send measurement data to backend server
-static esp_err_t send_measurement_data(float db_level, freq_band_t* bands, int num_bands)
+static esp_err_t send_measurement_data(float db_level, float db_peak, freq_band_t* bands, int num_bands)
 {
     // Get current time
     time_t now;
@@ -776,6 +948,8 @@ static esp_err_t send_measurement_data(float db_level, freq_band_t* bands, int n
     cJSON_AddStringToObject(root, "timestamp", timestamp);
     cJSON_AddNumberToObject(root, "db_level", db_level);
     cJSON_AddNumberToObject(root, "db_level_raw", db_level - calibration_offset_db);
+    cJSON_AddNumberToObject(root, "db_level_peak", db_peak);
+    cJSON_AddNumberToObject(root, "db_level_peak_raw", db_peak - calibration_offset_db);
     cJSON_AddStringToObject(root, "firmware_version", FIRMWARE_VERSION);
     
     cJSON *bands_array = cJSON_CreateArray();
@@ -886,41 +1060,59 @@ static esp_err_t check_and_perform_ota_update(void)
     snprintf(auth_header, sizeof(auth_header), "Bearer %s", API_KEY);
     esp_http_client_set_header(client, "Authorization", auth_header);
     
-    esp_err_t err = esp_http_client_perform(client);
-    
+    // Open connection and fetch headers first
+    esp_err_t err = esp_http_client_open(client, 0);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to check for updates: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
         esp_http_client_cleanup(client);
         return err;
     }
     
+    // Fetch headers to get status code and content length
+    int content_length = esp_http_client_fetch_headers(client);
     int status_code = esp_http_client_get_status_code(client);
-    int content_length = esp_http_client_get_content_length(client);
     
     ESP_LOGI(TAG, "Update check response: %d, content_length: %d", status_code, content_length);
     
     if (status_code == 204) {
         // No update available
         ESP_LOGI(TAG, "Firmware is up to date");
+        esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_OK;
     } else if (status_code != 200) {
         ESP_LOGW(TAG, "Unexpected response code: %d", status_code);
+        esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
     }
     
     // Read the response to get the new version info
     char response_buffer[512];
-    int read_len = esp_http_client_read(client, response_buffer, sizeof(response_buffer) - 1);
+    memset(response_buffer, 0, sizeof(response_buffer));
+    int read_len = 0;
+    int total_read = 0;
+    
+    // Read response in chunks
+    while (total_read < sizeof(response_buffer) - 1 && total_read < content_length) {
+        read_len = esp_http_client_read(client, response_buffer + total_read, 
+                                         sizeof(response_buffer) - 1 - total_read);
+        if (read_len <= 0) {
+            break;
+        }
+        total_read += read_len;
+    }
+    
+    esp_http_client_close(client);
     esp_http_client_cleanup(client);
     
-    if (read_len <= 0) {
-        ESP_LOGE(TAG, "Failed to read update info");
+    if (total_read <= 0) {
+        ESP_LOGE(TAG, "Failed to read update info, read %d bytes", total_read);
         return ESP_FAIL;
     }
     
-    response_buffer[read_len] = 0;
+    response_buffer[total_read] = '\0';
+    ESP_LOGI(TAG, "Read %d bytes of update info", total_read);
     ESP_LOGI(TAG, "Update available: %s", response_buffer);
     
     // Parse JSON response to get version and download URL
@@ -999,7 +1191,7 @@ static void ota_task(void *pvParameters)
 
 void app_main(void)
 {
-    // v1.1.1: OTA URL Fix
+    // v2.1.1-prod: OTA Response Reading Fix - Properly read JSON response for firmware updates
     ESP_LOGI(TAG, "Sound Level Sensor Starting...");
     ESP_LOGI(TAG, "Firmware Version: %s", FIRMWARE_VERSION);
     

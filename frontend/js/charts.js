@@ -71,10 +71,11 @@ function updateHistoryChart(measurements, bandConfig = []) {
 
     const labels = measurements.map(m => new Date(m.timestamp).toLocaleString());
     const overallData = measurements.map(m => m.db_level);
+    const peakData = measurements.map(m => m.db_level_peak || null);
 
     // Prepare datasets
     const datasets = [{
-        label: 'Overall Sound Level',
+        label: 'Average Sound Level',
         data: overallData,
         borderColor: 'rgb(37, 99, 235)',
         backgroundColor: 'rgba(37, 99, 235, 0.1)',
@@ -82,6 +83,20 @@ function updateHistoryChart(measurements, bandConfig = []) {
         fill: true,
         borderWidth: 3
     }];
+    
+    // Add peak data if available
+    if (peakData.some(p => p !== null)) {
+        datasets.push({
+            label: 'Peak Sound Level',
+            data: peakData,
+            borderColor: 'rgb(239, 68, 68)',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            tension: 0.1,
+            fill: false,
+            borderWidth: 2,
+            borderDash: [5, 5]
+        });
+    }
 
     // Add frequency band datasets if available
     // Find first measurement with frequency bands data

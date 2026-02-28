@@ -44,8 +44,20 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeKiosk() {
-    // Initial data fetch
-    fetchAllData();
+    // Load color configuration
+    if (typeof SoundLevelColors !== 'undefined') {
+        SoundLevelColors.load().then(() => {
+            console.log('Color config loaded for kiosk');
+            // Initial data fetch after config loaded
+            fetchAllData();
+        }).catch(err => {
+            console.warn('Failed to load color config, using defaults:', err);
+            fetchAllData();
+        });
+    } else {
+        // Initial data fetch
+        fetchAllData();
+    }
     
     // Set up auto-refresh
     updateTimer = setInterval(fetchAllData, KIOSK_CONFIG.refreshInterval);
@@ -93,6 +105,7 @@ async function fetchDevices() {
                         ...device,
                         latest_measurement: latest ? {
                             db_level: latest.db_level,
+                            db_level_peak: latest.db_level_peak,
                             overall_db: latest.db_level,
                             frequency_bands: latest.frequency_bands,
                             timestamp: latest.timestamp
@@ -168,16 +181,31 @@ function updateSystemStatus(devices) {
     
     document.getElementById('activeSensors').textContent = `${activeDevices}/${totalDevices}`;
     
-    // Determine overall status
-    const criticalDevices = devices.filter(d => 
-        isDeviceActive(d) && d.latest_measurement?.db_level > 95
-    ).length;
+    // Determine overall status based on PEAK values (or fall back to average)
+    let criticalDevices, warningDevices;
     
-    const warningDevices = devices.filter(d => 
-        isDeviceActive(d) && 
-        d.latest_measurement?.db_level >= 80 && 
-        d.latest_measurement?.db_level <= 95
-    ).length;
+    if (typeof SoundLevelColors !== 'undefined') {
+        // Use color config thresholds
+        const thresholds = SoundLevelColors.getThresholds();
+        criticalDevices = devices.filter(d => {
+            const level = d.latest_measurement?.db_level_peak || d.latest_measurement?.db_level || 0;
+            return isDeviceActive(d) && level >= thresholds.red.min;
+        }).length;
+        warningDevices = devices.filter(d => {
+            const level = d.latest_measurement?.db_level_peak || d.latest_measurement?.db_level || 0;
+            return isDeviceActive(d) && level >= thresholds.orange.min && level < thresholds.red.min;
+        }).length;
+    } else {
+        // Fallback to hardcoded thresholds
+        criticalDevices = devices.filter(d => {
+            const level = d.latest_measurement?.db_level_peak || d.latest_measurement?.db_level || 0;
+            return isDeviceActive(d) && level > 95;
+        }).length;
+        warningDevices = devices.filter(d => {
+            const level = d.latest_measurement?.db_level_peak || d.latest_measurement?.db_level || 0;
+            return isDeviceActive(d) && level >= 80 && level <= 95;
+        }).length;
+    }
     
     const statusBadge = document.getElementById('overallStatus');
     if (criticalDevices > 0) {
@@ -196,10 +224,10 @@ function updateSensorList(devices) {
     const sensorList = document.getElementById('sensorList');
     sensorList.innerHTML = '';
     
-    // Sort by dB level (highest first)
+    // Sort by peak dB level (highest first), fall back to average
     const sortedDevices = [...devices].sort((a, b) => {
-        const aDb = a.latest_measurement?.db_level || 0;
-        const bDb = b.latest_measurement?.db_level || 0;
+        const aDb = a.latest_measurement?.db_level_peak || a.latest_measurement?.db_level || 0;
+        const bDb = b.latest_measurement?.db_level_peak || b.latest_measurement?.db_level || 0;
         return bDb - aDb;
     });
     
@@ -212,15 +240,24 @@ function updateSensorList(devices) {
 function createSensorItem(device) {
     const div = document.createElement('div');
     const isActive = isDeviceActive(device);
-    const db = device.latest_measurement?.db_level || 0;
+    const dbAvg = device.latest_measurement?.db_level || 0;
+    const dbPeak = device.latest_measurement?.db_level_peak;
+    const db = dbPeak || dbAvg;  // Use peak for status color if available
     
     let statusClass = 'normal';
     if (!isActive) {
         statusClass = 'offline';
-    } else if (db > 95) {
-        statusClass = 'critical';
-    } else if (db >= 80) {
-        statusClass = 'warning';
+    } else if (typeof SoundLevelColors !== 'undefined') {
+        // Use color config
+        const band = SoundLevelColors.getBand(db);
+        statusClass = band === 'red' ? 'critical' : band === 'orange' ? 'warning' : 'normal';
+    } else {
+        // Fallback to hardcoded thresholds
+        if (db > 95) {
+            statusClass = 'critical';
+        } else if (db >= 80) {
+            statusClass = 'warning';
+        }
     }
     
     div.className = `sensor-item ${statusClass}`;
@@ -232,7 +269,11 @@ function createSensorItem(device) {
             </span>
         </div>
         <div class="sensor-value">
-            ${isActive ? db.toFixed(1) + ' dB' : '--'}
+            ${isActive ? (
+                dbPeak ? 
+                    `<div style="font-size: 0.85em; margin-bottom: 2px;">Avg: ${dbAvg.toFixed(1)} dB</div><div style="font-weight: bold; color: #e74c3c;">Peak: ${dbPeak.toFixed(1)} dB</div>` 
+                    : `${dbAvg.toFixed(1)} dB`
+            ) : '--'}
         </div>
     `;
     
@@ -389,10 +430,17 @@ function createSensorMarker(device, position) {
     let statusClass = 'normal';
     if (!isActive) {
         statusClass = 'offline';
-    } else if (db > 95) {
-        statusClass = 'critical';
-    } else if (db >= 80) {
-        statusClass = 'warning';
+    } else if (typeof SoundLevelColors !== 'undefined') {
+        // Use color config
+        const band = SoundLevelColors.getBand(db);
+        statusClass = band === 'red' ? 'critical' : band === 'orange' ? 'warning' : 'normal';
+    } else {
+        // Fallback to hardcoded thresholds
+        if (db > 95) {
+            statusClass = 'critical';
+        } else if (db >= 80) {
+            statusClass = 'warning';
+        }
     }
     
     group.setAttribute('class', `sensor-marker ${statusClass}`);

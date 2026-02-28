@@ -1,0 +1,232 @@
+{
+  "dashboard": {
+    "title": "Sound Monitoring Mesh - All Sensors",
+    "tags": ["sound", "monitoring", "sensors"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "type": "timeseries",
+        "title": "All Sensors - Peak dB Levels",
+        "targets": [
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1c:ec.db_level_peak",
+            "refId": "A",
+            "alias": "Blue"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:18.db_level_peak",
+            "refId": "B",
+            "alias": "Yellow"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:1c.db_level_peak",
+            "refId": "C",
+            "alias": "Grey"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:4c.db_level_peak",
+            "refId": "D",
+            "alias": "Orange"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:50.db_level_peak",
+            "refId": "E",
+            "alias": "Green"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:84.db_level_peak",
+            "refId": "F",
+            "alias": "Red"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:d4.db_level_peak",
+            "refId": "G",
+            "alias": "Black"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1e:34.db_level_peak",
+            "refId": "H",
+            "alias": "Pink"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1e:4c.db_level_peak",
+            "refId": "I",
+            "alias": "Purple"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "dB",
+            "min": 30,
+            "max": 120,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 80, "color": "yellow" },
+                { "value": 95, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "type": "timeseries",
+        "title": "Blue Sensor - Avg vs Peak",
+        "targets": [
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1c:ec.db_level",
+            "refId": "A",
+            "alias": "Average"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1c:ec.db_level_peak",
+            "refId": "B",
+            "alias": "Peak"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "dB",
+            "min": 30,
+            "max": 120
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "type": "timeseries",
+        "title": "Blue Sensor - Frequency Bands",
+        "targets": [
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1c:ec.band_1",
+            "refId": "A",
+            "alias": "Low (20-200 Hz)"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1c:ec.band_2",
+            "refId": "B",
+            "alias": "Mid (200-2000 Hz)"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1c:ec.band_3",
+            "refId": "C",
+            "alias": "High (2000-8000 Hz)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "dB"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 16
+        },
+        "type": "stat",
+        "title": "Current Sound Levels",
+        "targets": [
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1c:ec.db_level_peak",
+            "refId": "A",
+            "alias": "Blue"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:18.db_level_peak",
+            "refId": "B",
+            "alias": "Yellow"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:1c.db_level_peak",
+            "refId": "C",
+            "alias": "Grey"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:4c.db_level_peak",
+            "refId": "D",
+            "alias": "Orange"
+          },
+          {
+            "datasource": "Sound Monitoring System",
+            "target": "08:92:72:84:1d:50.db_level_peak",
+            "refId": "E",
+            "alias": "Green"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "dB",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 80, "color": "yellow" },
+                { "value": 95, "color": "red" }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "refresh": "30s"
+  }
+}

@@ -983,9 +983,9 @@ HOST=0.0.0.0
 
 # API Security - Shared Key Approach
 # All devices use this single API key (must match firmware CONFIG_API_KEY)
-SHARED_API_KEY=REDACTED
+SHARED_API_KEY=<your-api-key>  # see CREDENTIALS.local
 # Legacy alias (SHARED_API_KEY takes precedence)
-API_KEY=REDACTED
+API_KEY=<your-api-key>  # see CREDENTIALS.local
 
 # Data Storage
 DATA_DIR=./data
