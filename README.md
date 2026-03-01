@@ -1,451 +1,489 @@
-# Sound Level Mesh System
+# Sound Monitoring Mesh
 
-A distributed sound monitoring system consisting of ESP32-C3-based WiFi sensor devices that communicate with a central web server to monitor, analyze, and report sound levels and frequency band measurements.
+A distributed sound monitoring system: ESP32-C3 sensor nodes sample audio via INMP441 I2S microphone, compute FFT-based dB and frequency-band levels, and POST measurements to a Node.js backend. A browser frontend provides real-time monitoring, triangulation, history playback, alerts, analytics, and a public kiosk display.
 
-**Current Status:** ✅ **Operational with 9 devices** actively sending real-time data every 5 seconds.
+**Status:** ✅ Operational — 9 devices at Nova Labs makerspace (`xibo.space.nova-labs.org`)  
+**Firmware:** `2.1.1-prod` (production) · `2.1.2-dev` (dev / OTA testing)  
+**Backend / Frontend:** `v2.1.0`
 
-**Hardware Status:** All hardware components have been purchased and are awaiting delivery (January 2026).
+---
 
-## 📋 Project Status
+## Table of Contents
 
-**Current Phase: ✅ BUILD COMPLETE - Production Deployment at Nova Labs**
+1. [Architecture](#architecture)
+2. [Hardware](#hardware)
+3. [Firmware](#firmware)
+4. [Backend](#backend)
+5. [Frontend](#frontend)
+6. [Production Deployment](#production-deployment-nova-labs)
+7. [Development Setup](#development-setup)
+8. [Scripts](#scripts)
+9. [Security & Credentials](#security--credentials)
+10. [Changelog](#changelog)
 
-**All System Code Built (January 30, 2026):**
+---
 
-### ✅ Development Environment #1 (MacBook - Testing)
-- ✅ MacBook Development Setup Complete
-  - VS Code with Cursor IDE
-  - ESP-IDF v6.1-dev-2300 installed and configured
-  - Node.js v23.11.0, Python 3.12.8
-  - All build tools installed (cmake, ninja, dfu-util)
-- ✅ Hardware Setup Complete
-  - ESP32-C3 SuperMini connected via USB to MacBook (/dev/cu.usbmodem2101)
-  - INMP441 microphone wired to ESP32-C3 (GPIO 4, 5, 6 for I2S)
-  - Home WiFi network for ESP32 ↔ MacBook communication
-  - Verified working: I2S audio sampling (56-70 dB range observed)
-- ✅ Network Configuration
-  - WiFi SSID: YOUR_WIFI_SSID (WPA2)
-  - MacBook IP: 192.168.68.57 (en0 interface)
-  - Backend: http://192.168.68.57:3000
-  - Frontend: http://localhost:8080
-  - Device MAC: 08:92:72:84:1d:18
+## Architecture
 
-### Production Environment (Nova Labs)
-- 📍 Location: Nova Labs makerspace
-- 📡 WiFi Network: REDACTED_WORKSHOP_WIFI_SSID (isolated IoT network)
-- 🔒 Network Password: `<see CREDENTIALS.local>`
-- 💻 Server: Ubuntu 20.04.2 LTS (xibo.space.nova-labs.org)
-- 📱 Deployment: 9 ESP32-C3 sensors (8 active, 1 offline)
-- 🌐 Backend URL: http://xibo.space.nova-labs.org/api/sound
-- 🖥️ Frontend URL: http://xibo.space.nova-labs.org/sound/
-- 🔑 **Shared API Key**: `<see CREDENTIALS.local>`
-- 📦 **Current Firmware**: v1.2.1-prod
-  - Example: `YOUR_API_KEY_HERE`
-  - Set in firmware via `CONFIG_API_KEY` (sdkconfig)
-  - Set in backend via `SHARED_API_KEY` in `.env`
-  - Must match exactly for authentication to work
+```
+ESP32-C3 + INMP441  (×9)
+        │  WiFi (REDACTED_WORKSHOP_WIFI_SSID)
+        ▼
+┌───────────────────────────────┐
+│  xibo.space.nova-labs.org     │
+│  Ubuntu 20.04 · Apache proxy  │
+│                               │
+│  ┌──────────────────────────┐ │
+│  │ Node.js/Express :3000    │ │  ← /api/*
+│  │  13 REST route modules   │ │
+│  └──────────────────────────┘ │
+│  ┌──────────────────────────┐ │
+│  │ Frontend (vanilla JS)    │ │  ← xibo.space.nova-labs.org/sound/
+│  │  Served by Apache        │ │
+│  └──────────────────────────┘ │
+│  ┌──────────────────────────┐ │
+│  │ JSON file storage        │ │  ← backend/data/
+│  └──────────────────────────┘ │
+└───────────────────────────────┘
+```
 
-### ✅ Software Components Built
-- ✅ **ESP32-C3 Firmware** - Complete and tested
-  - I2S audio sampling (16kHz, 32-bit), FFT analysis (1024 points), frequency bands
-  - WiFi connectivity with automatic reconnection
-  - HTTP client with retry logic (3 attempts, exponential backoff)
-  - NTP time sync, robust error handling
-  - Successfully reading microphone (56-70 dB range)
-  - Full source code in `firmware/sound-level-sensor/`
-- ✅ **Backend API Server** - Complete and running
-  - Node.js/Express RESTful API with 10MB body parser
-  - Device management, measurement storage (file-based JSON)
-  - 30-second request/response timeouts for IoT devices
-  - Full source code in `backend/`
-- ✅ **Frontend Dashboard** - Complete and running
-  - Responsive web interface
-  - Real-time monitoring, device management
-  - Full source code in `frontend/`
+**Data flow:** Each device POSTs to `/api/data` every 5 s → backend stores JSON → frontend polls → renders.  
+**Authentication:** Shared API key in `Authorization: Bearer` header (all devices share one key, uniquely identified by MAC address).
 
-### What's Complete
-- ✅ Product Requirements Document (PRD)
-- ✅ System Architecture Document
-- ✅ Hardware Design Document
-- ✅ Technical specifications and design decisions
-- ✅ **Component Pinout Reference** - Verified ESP32-C3 and INMP441 pinouts
-- ✅ **Hardware Delivered and Connected**
-  - ESP32-C3 SuperMini devices
-  - INMP441 I2S Microphones
-  - USB-C cables and power
-- ✅ **Development Environment Configured**
-  - MacBook with all development tools installed
-  - ESP-IDF framework ready
-  - WiFi network setup
-- ✅ **ESP32-C3 Firmware** - Complete and tested
-  - I2S audio sampling (16kHz, 32-bit)
-  - FFT analysis (1024 points) with frequency band measurement
-  - WiFi connectivity with HTTP client
-  - Shared API key authentication
-  - Automatic MAC address-based device identification
-  - **OTA firmware updates** - Remote updates over WiFi
-  - See `firmware/sound-level-sensor/`
-- ✅ **Backend API Server** - Complete and operational
-  - Node.js/Express with file-based JSON storage
-  - Full REST API with 10 route modules
-  - Shared API key validation
-  - Device, measurement, alert, analytics, triangulation endpoints
-  - **Firmware management** - OTA update serving and version control
-  - See `backend/`
-- ✅ **Frontend Dashboard** - Complete and operational
-  - 7 functional tabs (Dashboard, Devices, Triangulation, History, Alerts, Analytics, Settings)
-  - Real-time device monitoring with auto-refresh
-  - Historical data visualization with Chart.js
-  - Second-precision datetime controls for history and analytics
-  - Device management and configuration
-  - Alert configuration and monitoring
-  - Sound source triangulation with visual map
-  - Public kiosk display mode
-  - See `frontend/`
+---
 
-### Current System Status
-- ✅ **Multiple devices registered and operational**
-- ✅ **Real-time data collection active**
-- ✅ **All frontend features functional**
-- ✅ **Backend API fully operational**
-- ✅ **End-to-end data flow verified**
+## Hardware
 
-## 🎯 Project Overview
+### Bill of Materials (per sensor node)
 
-The Sound Level Mesh System is designed to:
+| Component | Part | Notes |
+|-----------|------|-------|
+| MCU | ESP32-C3 SuperMini | RISC-V 160 MHz, 4 MB flash, 400 KB SRAM, USB-CDC |
+| Microphone | INMP441 I2S MEMS | −26 dBFS, 61 dB SNR, 60 Hz–15 kHz |
+| Power | USB-C cable + 5V wall charger | |
+| Enclosure | 15–30 mm foam microphone windscreen | RF-transparent (<0.5 dB loss), acoustically transparent |
+| Wiring | Dupont jumper wires | Solder header pins to ESP32-C3 SuperMini first |
 
-- Monitor sound levels (dB) in real-time from 10 distributed sensor locations
-- Measure sound levels across configurable frequency bands
-- Provide centralized web-based monitoring and administration
-- Support sensor calibration with dB offset adjustments
-- Store measurement data using file-based storage (JSON/CSV)
-- Deploy on Ubuntu 20.04 server with Nginx
+> ⚠️ 3D-printed PETG enclosures blocked WiFi signals (6–16 dB loss). Foam windscreens are the confirmed solution.
 
-## 📚 Documentation
+### Wiring — ESP32-C3 → INMP441
 
-### Main Documentation
+| ESP32-C3 | GPIO | INMP441 Pin | Signal |
+|----------|------|-------------|--------|
+| 3V3 | — | VDD | Power (3.3 V) |
+| GND | — | GND | Ground |
+| GND | — | L/R | Channel select (GND = Left channel) |
+| **4** | GPIO 4 | SD | I2S Data |
+| **5** | GPIO 5 | SCK | I2S Bit Clock |
+| **6** | GPIO 6 | WS | I2S Word Select |
 
-- **[HARDWARE_AND_FIRMWARE.md](HARDWARE_AND_FIRMWARE.md)** - Complete hardware setup, wiring, firmware building, flashing, and device registration
-- **[DEVELOPER_REFERENCE.md](DEVELOPER_REFERENCE.md)** - Architecture, API documentation, security, and development guidelines
+> ⚠️ A **10 kΩ pull-down resistor on the SD line** (GPIO 4 to GND) is required. Without it the SD line floats and produces noise/incorrect readings.
 
-### Archive
+```
+ESP32-C3 SuperMini             INMP441
+  3.3V ●────────────────────── VDD
+   GND ●──────────┬─────────── GND
+                  └─────────── L/R  (Left channel)
+GPIO 4 ●──[10kΩ]──┤─────────── SD
+GPIO 5 ●────────────────────── SCK
+GPIO 6 ●────────────────────── WS
+```
 
-All detailed reference docs and older documentation have been consolidated. See [docs-archive/](docs-archive/) for:
-- Product Requirements Document (PRD)
-- Detailed Architecture Document
-- Hardware Design Specifications
-- Previous build/setup guides
-Complete verified pinout specifications:
-- ESP32-C3 SuperMini complete pinout with physical orientation
-### Archive
+---
 
-Older documentation files have been consolidated. See [docs-archive/](docs-archive/) for archived files.
+## Firmware
 
-## 🛠️ Technology Stack
+**Source:** `firmware/sound-level-sensor/`  
+**Current versions:** `2.1.1-prod` (production binary) · `2.1.2-dev` (dev binary, points at local backend)
 
-### Hardware
-- **Microcontroller:** ESP32-C3 Super Mini Development Board (4MB flash) - ✅ **10 units purchased**
-- **Microphone:** MH-ET LIVE INMP441 I2S Digital Microphone Module - ✅ **10 units purchased**
-- **Power:** USB Wall Chargers + USB-C Cables - ✅ **10 chargers, 12 cables purchased**
-- **Enclosure:** Microphone foam windscreens - ✅ **Simple, RF-transparent dust protection**
-- **Deployed:** 9 devices currently operational and sending data
-- **Status:** Hardware delivered and operational (February 2026)
+### Key Features
 
-### Firmware
-- **Framework:** ESP-IDF (Espressif IoT Development Framework)
-- **Development:** MacBook with Cursor IDE
-- **Libraries:** ESP-IDF WiFi, HTTP client, I2S driver, ESP-DSP
-- **Device Identification:** Automatic via MAC address (e.g., `08:92:72:84:1d:18`)
-- **Authentication:** Shared API key across all devices
-- **OTA Updates:** Over-the-air firmware updates via HTTP
-- **Partition Table:** Dual OTA partitions for safe rollback
-- **Version Control:** Semantic versioning (MAJOR.MINOR.PATCH)
+| Feature | Detail |
+|---------|--------|
+| I2S sampling | 16 kHz, **32-bit container** (INMP441 outputs 24-bit; DMA data width must be 32-bit) |
+| FFT | 1024-point, Hamming window, ESP-DSP library |
+| Frequency bands | 3 configurable bands (start Hz, end Hz per band), SPL via self-normalizing energy fraction |
+| dB calculation | Full-spectrum RMS + peak-hold over reporting window |
+| Event detection | Threshold 55 dB, min duration 50 ms, cooldown 500 ms |
+| OTA updates | Checks `/api/firmware/check` hourly; dual OTA partitions; auto-rollback on failure |
+| Time sync | SNTP/NTP on boot |
+| Auth | `Authorization: Bearer <API_KEY>` on all API calls |
+| Device identity | MAC address used as `device_id` (auto-detected at runtime) |
 
-### Authentication Architecture
-**Shared API Key Approach:**
-- All devices use the **same API key** compiled into firmware
-- Simplifies deployment: one firmware build for all devices
-- Each device uniquely identified by MAC address (e.g., `08:92:72:84:1d:18`)
-- Backend validates shared key + verifies device exists  
-- Suitable for trusted, internal networks only
-- Current deployment: 9 devices using shared key `YOUR_API_KEY_HERE`
+### Configuration (`sdkconfig.defaults` → copy to `sdkconfig`)
 
-**Configuration:**
-- Firmware: `CONFIG_API_KEY` in `sdkconfig`
-- Backend: `SHARED_API_KEY` or `API_KEY` in `.env`
-- **Must match exactly** for authentication
+```ini
+CONFIG_WIFI_SSID         = "YOUR_WIFI_SSID"
+CONFIG_WIFI_PASSWORD     = "YOUR_WIFI_PASSWORD"
+CONFIG_SERVER_URL        = "http://YOUR_SERVER_HOST:3000"
+CONFIG_API_KEY           = "YOUR_API_KEY"
+```
 
-### Server
-- **Runtime:** Node.js v18+ with Express.js
-- **API:** RESTful architecture with 9 route modules
-- **Storage:** File-based JSON (devices, measurements, alerts, configurations)
-- **Deployment:** Can run on any Node.js environment (development: MacBook, production: Ubuntu/Nginx)
+Real values live in `CREDENTIALS.local` (gitignored). Never commit actual credentials.
 
-### Frontend
-- **Technology:** Vanilla JavaScript with Chart.js for visualizations
-- **Architecture:** Single-page application with tab-based navigation
-- **Features:**
-  - **Dashboard:** Real-time device monitoring with live statistics
-  - **Devices:** Device registration, management, and configuration
-  - **Triangulation:** Sound source localization with visual 2D map
-    - Interactive sensor position configuration
-    - Acoustic barrier modeling
-    - **Map Labels:** Custom text annotations for zones/equipment (add/edit/delete)
-  - **History:** Time-series data viewer with second-precision datetime controls
-  - **Alerts:** Alert rule configuration and history viewer
-  - **Analytics:** Statistical analysis and trend visualization
-  - **Settings:** System configuration and data management
-  - **Kiosk Mode:** Public display dashboard with auto-scaling map and labels
-- **Responsive:** Works on desktop and tablet devices
+### Build & Flash
 
-### Development Environment
-- **Development Machine:** MacBook with VS Code/Cursor IDE
-- **Remote Access:** SSH to Ubuntu 20.04 server (for production deployment)
-- **Local Development:** MacBook for all development and testing
+```bash
+# One-time: source ESP-IDF
+source ~/esp/esp-idf/export.sh
 
-**Current Setup (Environment #1):**
-- MacBook serves as both development machine AND web server
-- ESP32-C3 connected via USB (for flashing) and WiFi (for runtime)
-- INMP441 microphone connected via I2S to ESP32-C3
-- Home WiFi network for ESP32 ↔ MacBook communication
-- All components co-located for rapid development
+cd firmware/sound-level-sensor
 
-**Future Setup (Environment #2):**
-- MacBook for development
-- Remote Ubuntu 20.04 server for production deployment
-- 10 ESP32 devices deployed at various locations
+# Configure (first time or when credentials change)
+cp sdkconfig.defaults sdkconfig
+idf.py menuconfig          # Set WiFi SSID, password, server URL, API key
 
-## 📁 Repository Structure
+# Build
+idf.py build
+
+# Flash (USB)
+idf.py -p /dev/cu.usbmodem* flash
+
+# Monitor serial output
+idf.py -p /dev/cu.usbmodem* monitor
+```
+
+Expected serial output after successful boot:
+```
+I (xxxx) SOUND_SENSOR: Connected to WiFi
+I (xxxx) SOUND_SENSOR: NTP sync complete
+I (xxxx) SOUND_SENSOR: Starting measurement loop
+I (xxxx) SOUND_SENSOR: dB=62.3 peak=71.0 band1=45.2 band2=58.1 band3=41.6
+```
+
+### OTA Update Workflow
+
+1. Build new firmware binary
+2. Copy binary to `backend/data/firmware/sound-sensor-X.Y.Z.bin`
+3. Update `backend/data/firmware/versions.json` (version, filename, size, sha256)
+4. Devices check hourly; auto-download and reboot if newer version found
+
+Compute sha256:
+```bash
+shasum -a 256 backend/data/firmware/sound-sensor-X.Y.Z.bin
+stat -f%z backend/data/firmware/sound-sensor-X.Y.Z.bin  # file size in bytes
+```
+
+### Firmware Version Registry (`backend/data/firmware/versions.json`)
+
+| Version | Type | Notes |
+|---------|------|-------|
+| `2.1.1-prod` | Production | **Current** — I2S DMA fix, frequency SPL fix, 10kΩ SD pull-down |
+| `2.1.2-dev` | Dev | Same fixes; points to local backend for OTA testing |
+| `2.1.0-prod` | Production | Continuous sampling + peak detection |
+| `1.2.0-prod` | Legacy | Production WiFi + server config |
+
+### Critical I2S Fix (v2.1.1)
+
+Prior firmware used `I2S_DATA_BIT_WIDTH_24BIT` in the DMA config, causing DMA mis-packing that produced a constant ~110 dB reading. The fix:
+
+```c
+// WRONG (caused constant ~110 dB):
+.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT,
+
+// CORRECT (INMP441 uses 32-bit container for 24-bit data):
+.data_bit_width = I2S_DATA_BIT_WIDTH_32BIT,
+```
+
+---
+
+## Backend
+
+**Source:** `backend/src/`  
+**Runtime:** Node.js ≥18, Express.js  
+**Storage:** JSON files in `backend/data/`
+
+### Setup
+
+```bash
+cd backend
+cp .env.example .env       # configure SHARED_API_KEY (and optionally PORT)
+npm install
+npm start                  # production
+npm run dev                # development (nodemon)
+```
+
+**Environment variables (`.env`):**
+```
+PORT=3000
+HOST=0.0.0.0
+SHARED_API_KEY=<see CREDENTIALS.local>
+```
+
+### API Routes
+
+All routes are prefixed `/api/`.
+
+| Prefix | File | Description |
+|--------|------|-------------|
+| `/api/devices` | `routes/devices.js` | Register, list, update, delete devices; calibration; frequency-band config |
+| `/api/data` | `routes/data.js` | Receive measurements; query recent/range; export CSV/JSON |
+| `/api/config` | `routes/config.js` | Display thresholds; per-device config |
+| `/api/alerts` | `routes/alerts.js` | Alert rules CRUD; alert history |
+| `/api/analytics` | `routes/analytics.js` | Aggregated stats, trend data, heatmap data |
+| `/api/positions` | `routes/positions.js` | Sensor XYZ positions for triangulation map |
+| `/api/barriers` | `routes/barriers.js` | Acoustic barriers (walls, curtains, partitions) |
+| `/api/sources` | `routes/sources.js` | Sound source location records |
+| `/api/triangulation` | `routes/triangulation.js` | Locate/locate-multiple; playback endpoints |
+| `/api/labels` | `routes/labels.js` | Map label annotations CRUD |
+| `/api/firmware` | `routes/firmware.js` | OTA: `/check`, `/download/:version`, `/upload`, `/versions`, `/latest` |
+| `/api/grafana` | `routes/grafana.js` | Grafana JSON datasource (`/search`, `/query`, `/annotations`) |
+| `/api/version` | `routes/version.js` | Returns backend version |
+
+**Key endpoints:**
+```
+GET  /health
+GET  /api/devices
+POST /api/devices/register              ← called by firmware on boot
+POST /api/data                          ← called by firmware every 5 s
+GET  /api/data/recent                   ← latest reading per device
+GET  /api/data/measurements/:deviceId
+GET  /api/firmware/check?device_id=&current_version=
+GET  /api/firmware/download/:version
+GET  /api/triangulation/locate
+GET  /api/triangulation/playback/range
+GET  /api/grafana/kiosk/data
+```
+
+**Data storage layout:**
+```
+backend/data/
+├── devices/           ← one JSON file per device (MAC address filename)
+├── measurements/      ← daily JSON files per device (gitignored)
+├── config/
+│   └── display-thresholds.json
+├── alerts/
+│   └── history/
+├── firmware/
+│   ├── versions.json
+│   └── *.bin
+├── map_labels.json
+└── acoustic_barriers.json
+```
+
+---
+
+## Frontend
+
+**Source:** `frontend/`  
+**Technology:** Vanilla JavaScript (ES6+), HTML5/CSS3, Chart.js 4.4.0  
+**Served by:** Apache at `/sound/` (production) or directly from `frontend/` in development
+
+### Pages
+
+| File | Purpose |
+|------|---------|
+| `index.html` | Main dashboard (7 tabs) |
+| `kiosk.html` | Public display — full-screen map + sensor status |
+| `kiosk-debug.html` | Debug kiosk with API diagnostics |
+| `debug.html` | API connectivity testing |
+
+### Dashboard Tabs (`index.html`)
+
+| Tab | Key Features |
+|-----|-------------|
+| **Dashboard** | Live device cards: dB level, frequency bands, color-coded status; auto-refresh 5 s |
+| **Devices** | Register (MAC), edit, calibrate (dB offset), delete, export JSON |
+| **Triangulation** | HTML5 Canvas map; sensor positions; acoustic barriers; map labels; real-time + playback |
+| **History** | Time-series charts per device; second-precision datetime range picker |
+| **Alerts** | Create/edit/delete alert rules; alert history viewer |
+| **Analytics** | Statistical summaries, trend charts, customizable date ranges |
+| **Settings** | Display thresholds, data retention, system configuration |
+
+### Kiosk Mode (`kiosk.html`)
+
+Auto-refreshing public display designed for permanent large-screen installation:
+- Workshop layout canvas with sensor positions, acoustic barriers, and map labels
+- Color-coded sensor indicators by dB level
+- Active sensor count and system status summary
+
+### Triangulation Playback
+
+The Triangulation tab supports historical replay:
+- Transport: play/pause, jog ±1 s, skip to start/end
+- Variable speed: 0.25×, 0.5×, 1×, 2×, 5×, 10×
+- Date/time range picker (day/hour/minute/second precision)
+- Timeline slider with data availability indicator
+
+### Color Thresholds (configurable via `/api/config/display-thresholds`)
+
+| Range | Color | Default |
+|-------|-------|---------|
+| Quiet | Green | < 80 dB |
+| Moderate | Yellow | 80–95 dB |
+| Loud | Red | > 95 dB |
+
+---
+
+## Production Deployment (Nova Labs)
+
+| Item | Value |
+|------|-------|
+| Server | `xibo.space.nova-labs.org` — Ubuntu 20.04.2 LTS |
+| Proxy | Apache 2.4 reverse proxy |
+| WiFi network | `REDACTED_WORKSHOP_WIFI_SSID` — isolated IoT VLAN |
+| Backend URL | `http://xibo.space.nova-labs.org/api/sound` |
+| Frontend URL | `http://xibo.space.nova-labs.org/sound/` |
+| Active devices | 9 ESP32-C3 sensors |
+
+### Apache Configuration (key lines)
+
+```apache
+# Proxy /api/sound/* → Node.js :3000/api/*
+ProxyPass        /api/sound/ http://localhost:3000/api/
+ProxyPassReverse /api/sound/ http://localhost:3000/api/
+
+# Serve frontend static files
+Alias /sound/ /path/to/frontend/
+```
+
+> ⚠️ The trailing slash on both `ProxyPass` paths is required. Without it, paths double to `/api/api/`.
+
+### Operations
+
+```bash
+# SSH to server
+ssh user@xibo.space.nova-labs.org
+
+# Restart backend
+cd ~/sound-monitoring-mesh/backend && npm start
+
+# Deploy kiosk updates
+./scripts/deploy-kiosk.sh
+```
+
+### Grafana Integration
+
+The backend exposes a Grafana JSON datasource at `/api/grafana`.  
+Dashboard definition: `scripts/grafana/grafana-dashboard.json`  
+Install scripts: `scripts/grafana/install-grafana.sh` (dev) · `scripts/grafana/install-prod.sh` (production)
+
+---
+
+## Development Setup
+
+```bash
+# 1. Clone
+git clone git@github.com:sklosky-nl/sound-monitoring-mesh.git
+cd sound-monitoring-mesh
+
+# 2. Backend
+cd backend && cp .env.example .env   # fill in SHARED_API_KEY from CREDENTIALS.local
+npm install && npm start             # http://localhost:3000
+
+# 3. Access frontend
+open http://localhost:3000           # main dashboard
+open http://localhost:3000/kiosk.html
+
+# 4. Flash a device
+source ~/esp/esp-idf/export.sh
+cd firmware/sound-level-sensor
+cp sdkconfig.defaults sdkconfig
+idf.py menuconfig                    # set WiFi + server + API key
+idf.py build flash monitor -p /dev/cu.usbmodem*
+```
+
+**Versions:** Node.js ≥18 · ESP-IDF v6.x (tested with v6.1-dev-2300)
+
+---
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/deploy-kiosk.sh` | Deploy frontend updates to production server |
+| `scripts/grafana/install-grafana.sh` | Install Grafana on local/dev machine |
+| `scripts/grafana/install-prod.sh` | Install Grafana on production server |
+| `scripts/grafana/grafana-dashboard.json` | Grafana dashboard definition |
+
+---
+
+## Security & Credentials
+
+**No credentials are stored in this repository.**
+
+| Secret | Where used | How to set |
+|--------|-----------|------------|
+| WiFi SSID + password | Firmware `sdkconfig` | Copy from `CREDENTIALS.local` |
+| Shared API key | Firmware `sdkconfig` + backend `.env` | Copy from `CREDENTIALS.local` |
+
+The firmware and backend API key **must match exactly** for device authentication to work.
+
+> ⚠️ **Git history note:** Commits prior to `f087388` (Feb 28, 2026) contain real credential values. Those credentials have been rotated. If you fork this repo, use `bfg --replace-text secrets.txt` to purge history before making it public.
+
+---
+
+## Repository Structure
 
 ```
 sound-monitoring-mesh/
-├── README.md                           # This file
-├── sound level mesh system PRD.md      # Product Requirements Document
-├── sound level mesh architecture.md    # Architecture Document
-├── sound level mesh hardware design.md # Hardware Design Document
-├── COMPONENT_PINOUT_REFERENCE.md       # Verified component pinouts
-├── enclosure/                          # 3D printable enclosure files
-└── .gitignore                          # Git ignore rules
+├── README.md                        ← this file
+├── CHANGELOG.md                     ← version history
+├── CREDENTIALS.local                ← gitignored; real secrets
+├── backend/
+│   ├── src/
+│   │   ├── server.js
+│   │   ├── routes/                  ← 13 route modules
+│   │   ├── models/
+│   │   ├── services/
+│   │   └── utils/
+│   └── data/                        ← gitignored runtime data
+│       ├── devices/
+│       ├── measurements/
+│       ├── config/
+│       ├── alerts/
+│       ├── firmware/
+│       │   ├── versions.json
+│       │   └── *.bin
+│       ├── map_labels.json
+│       └── acoustic_barriers.json
+├── frontend/
+│   ├── index.html                   ← main dashboard (7 tabs)
+│   ├── kiosk.html                   ← public display
+│   ├── css/
+│   └── js/
+├── firmware/
+│   ├── sound-level-sensor/          ← production firmware
+│   │   ├── main/main.c
+│   │   ├── sdkconfig.defaults       ← placeholder values only (never real credentials)
+│   │   └── partitions.csv           ← dual OTA partitions
+│   └── sound-level-sensor-debug/    ← debug build (serial only, no WiFi)
+├── enclosure/
+│   ├── Sound Sensor enclosure.f3d   ← Fusion 360 (archived; foam windscreens used instead)
+│   └── WIFI_SIGNAL_SOLUTIONS.md
+├── scripts/
+│   ├── deploy-kiosk.sh
+│   └── grafana/
+│       ├── install-grafana.sh
+│       ├── install-prod.sh
+│       └── grafana-dashboard.json
+└── docs-archive/                    ← superseded reference documents
 ```
 
-## 🚀 Getting Started
+---
 
-### Current Development Environment (Environment #1)
+## Changelog
 
-**You are here!** This is the active development setup as of January 2026.
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
-**Setup Summary:**
-- **MacBook** - Development machine running VS Code, backend server, and frontend
-- **ESP32-C3 SuperMini** - Connected via USB to MacBook, connected to WiFi for runtime
-- **INMP441 Microphone** - Wired to ESP32-C3 using I2S (GPIO 4, 5, 6)
-- **Home WiFi** - Network connecting ESP32 to MacBook backend
+### Recent: v2.1.1-prod / v2.1.2-dev — Feb 28, 2026
+- Fix I2S DMA mis-packing (`I2S_DATA_BIT_WIDTH_24BIT` → `32BIT`) — was causing constant ~110 dB
+- Fix frequency band SPL calculation (self-normalizing energy fraction)
+- Confirm and document 10 kΩ pull-down on SD line (GPIO 4)
 
-**Port Configuration:**
-- **Server**: Port 3000 (backend serves both API and frontend)
-- **Access URLs**:
-  - Main Dashboard: http://localhost:3000
-  - API Endpoints: http://localhost:3000/api/*
-  - Health Check: http://localhost:3000/health
-  - Kiosk Display: http://localhost:3000/kiosk.html
-- **ESP32 connects to**: http://192.168.68.57:3000 (MacBook's WiFi IP)
+### v2.1.0-prod — Feb 12, 2026
+- Continuous sampling with peak detection (was previously sampling only 6.4% of audio)
+- Reports both RMS average and peak dB per reporting window
 
-**Notes:** 
-- Port 5000 is in use by macOS ControlCenter, so avoid using it.
-- Both backend and frontend ports should be **configurable via environment variables** to avoid conflicts.
+### v2.0.0 — Feb 12, 2026
+- Historical data playback for triangulation (timeline scrubber, variable speed)
+- Backend playback API: `/api/triangulation/playback/*`
 
-**Quick Start for Development:**
-
-1. **Start Backend Server (serves both API and frontend):**
-   ```bash
-   cd backend/
-   npm install
-   npm start    # Runs on port 3000
-   ```
-
-2. **Access the System:**
-   - Main Dashboard: http://localhost:3000
-   - Kiosk Display: http://localhost:3000/kiosk.html
-   - API Health: http://localhost:3000/health
-   
-   **Note:** Frontend is served automatically by the backend. No separate frontend server needed.
-
-3. **Flash ESP32 Firmware (if needed):**
-   ```bash
-   cd firmware/sound-level-sensor
-   . $HOME/esp/esp-idf/export.sh
-   idf.py build
-   idf.py -p /dev/cu.usbmodem* flash monitor
-   ```
-
-4. **Access Features:**
-   - Main Dashboard: http://localhost:3000
-   - API Docs: See DEVELOPER_REFERENCE.md
-   - Kiosk Display: http://localhost:3000/kiosk.html
-
-### For Future Production Deployment (Environment #2)
-
-For deploying to a remote Ubuntu 20.04 server with multiple ESP32 devices:
-
-1. **Clone the repository:**
-   ```bash
-   git clone git@github.com:sklosky-nl/sound-monitoring-mesh.git
-   cd sound-monitoring-mesh
-   ```
-
-2. **Review the documentation:**
-   - Start with the PRD for project requirements
-   - Review the Architecture Document Section 8.1.2 for production deployment
-   - Check the Hardware Design Document for hardware setup
-   - Review Component Pinout Reference for wiring
-
-3. **Production Server Setup:**
-   - See Architecture Document Section 8.5 for Ubuntu 20.04 setup
-   - Configure Nginx as reverse proxy
-   - Deploy backend and frontend applications
-
-### For Developers and Stakeholders
-
-Review the [Product Requirements Document](sound%20level%20mesh%20system%20PRD.md) for:
-- Project goals and objectives
-- Feature requirements
-- Success metrics
-- Timeline and milestones
-
-## 📊 System Specifications
-
-- **Number of Devices:** 9 ESP32 monitoring nodes (currently operational)
-- **Hardware Capacity:** 10 devices purchased (1 spare/development unit)
-- **Communication:** WiFi (802.11 b/g/n) to central server
-- **Data Storage:** File-based (7-day default retention, configurable)
-- **Measurement Range:** 30-130 dB
-- **Frequency Bands:** Configurable per device
-- **Calibration:** Per-device dB offset calibration
-- **Web Interface:** Responsive design (desktop and mobile)
-
-## 🔧 Key Features
-
-- **Real-time Monitoring:** Continuous sound level monitoring with < 10 second latency
-- **Frequency Band Analysis:** Configurable frequency bands for targeted sound analysis
-- **Sensor Calibration:** Per-device dB offset calibration for accurate measurements
-- **Centralized Management:** Web-based administration and monitoring interface
-- **File-based Storage:** Simple deployment without database requirements
-- **Responsive Web App:** Works on desktop and mobile browsers
-
-## 📝 Development Status
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Documentation | ✅ Complete | All design documents finalized |
-| **Component Pinout** | ✅ **Complete** | **ESP32-C3 and INMP441 pinouts verified** |
-| Hardware Purchase | ✅ Complete | All components purchased and delivered |
-| **Hardware Assembly** | ✅ **Complete** | **ESP32-C3 connected to INMP441 via I2S** |
-| **Dev Environment #1** | ✅ **Complete** | **MacBook setup with ESP-IDF, USB & WiFi ready** |
-| **ESP32-C3 Firmware** | ✅ **BUILT** | **Complete implementation, ready to flash** |
-| **Backend API** | ✅ **BUILT** | **Node.js server complete, ready to run** |
-| **Frontend Web App** | ✅ **BUILT** | **Dashboard complete, ready to serve** |
-| **Integration Testing** | ⏳ Next | Testing with Environment #1 |
-| Production Deployment | ⏳ Future | Environment #2 - Remote server |
-
-## 🔒 Security
-
-**⚠️ IMPORTANT: This repository does NOT contain sensitive credentials**
-
-Before committing to a public repository, sensitive files have been excluded via `.gitignore`:
-
-- `firmware/sound-level-sensor/sdkconfig` - WiFi credentials and server URLs
-- `backend/data/` - Device data, measurements, and logs
-- `.env` files - Environment variables
-
-**Setup Required:**
-1. Copy `firmware/sound-level-sensor/sdkconfig.example` to `sdkconfig`
-2. Run `idf.py menuconfig` and configure your WiFi credentials
-3. Backend creates data directories automatically on first run
-
-📖 **See [SECURITY.md](SECURITY.md) for complete security guide**
-
-## 🤝 Contributing
-
-This is currently a private project in the design phase. Development will begin once the design phase is complete and approved.
-
-## 📄 License
-
-[License to be determined]
-
-## 👤 Author
-
-**Stephen Klosky**  
-GitHub: [@sklosky-nl](https://github.com/sklosky-nl)  
-Email: stephen.klosky@nova-labs.org
-
-## 📞 Contact
-
-For questions or inquiries about this project, please contact the project maintainer.
+### v1.2.0 — Feb 11, 2026
+- Kiosk display page; production deployment to Nova Labs (9 devices)
+- Apache ProxyPass configuration
 
 ---
 
-## 📋 Recent Changes
-
-### February 10, 2026 - OTA Firmware Updates
-**New Feature: Over-The-Air Firmware Updates**
-- Added OTA update capability for remote firmware deployment
-- **Firmware Changes:**
-  - Updated partition table to `TWO_OTA` for dual app partitions
-  - Increased flash size configuration from 2MB to 4MB
-  - Added OTA update task checking for updates every hour
-  - Automatic rollback on failed updates
-  - Version tracking with semantic versioning (e.g., "1.0.0")
-  - First check 5 minutes after boot, then hourly
-- **Backend: Firmware Management API**
-  - New model: `Firmware.js` with version tracking and binary management
-  - New routes: `firmware.js` providing OTA endpoints
-  - Storage: `backend/data/firmware/` directory for binaries and metadata
-  - Endpoints: `/check`, `/download/:version`, `/upload`, `/versions`, `/latest`
-  - HTTP-based downloads for simplicity on trusted networks
-  - SHA-256 checksums for integrity verification
-- **Features:**
-  - Automatic update checks and downloads
-  - Staged rollout support (monitor first device before wide deployment)
-  - Version comparison using semantic versioning
-  - Safe dual-partition updates with automatic rollback
-  - Update history and version tracking
-- **Documentation:**
-  - Added comprehensive OTA section to HARDWARE_AND_FIRMWARE.md
-  - Created firmware management README at `backend/data/firmware/README.md`
-  - Updated system documentation for OTA workflows
-- **Use Cases:** Bug fixes, feature additions, configuration updates without physical access
-- **Safety:** Dual partitions prevent bricking, automatic rollback on failures
-
-### February 8, 2026 - Map Label System
-**New Feature: Custom Map Labels**
-- Added map label management system for annotating workshop maps
-- Backend: New `/api/labels` REST API with full CRUD operations
-  - Model: `MapLabel.js` with JSON file storage
-  - Routes: `labels.js` providing GET, POST, PUT, DELETE endpoints
-  - Storage: `backend/data/map_labels.json`
-- Frontend: Interactive label management in Triangulation tab
-  - "Configure Labels" button opens modal interface
-  - Add/edit/delete labels with position and styling
-  - Full style customization (colors, fonts, opacity, borders)
-  - Toggle label visibility with "Labels" checkbox
-  - Real-time canvas rendering with drop shadows
-- Kiosk Display: Auto-rendering of styled labels on SVG map
-  - Labels display between barriers and sensors
-  - Dynamic scaling with map bounds
-  - Sample labels included: Welding Station, Assembly Area, Storage
-- Use cases: Equipment markers, zone definitions, safety indicators
-- Documentation: Updated DEVELOPER_REFERENCE.md with API details and schemas
-
-### January 30, 2026 - Build Complete
-- All firmware, backend, and frontend components completed
-- 9 ESP32-C3 devices operational and sending data
-- Full triangulation system with multi-source detection
-- Kiosk display mode for public viewing
-
----
-
-**Last Updated:** February 10, 2026  
-**Project Phase:** ✅ Build Complete - Production Deployment  
-**Code Status:** All components operational with 9 active devices
-
-**📖 Next Steps:** See [QUICKSTART.md](QUICKSTART.md) for setup instructions
-
+**Author:** Stephen Klosky — [stephen.klosky@nova-labs.org](mailto:stephen.klosky@nova-labs.org)  
+**Last updated:** February 28, 2026

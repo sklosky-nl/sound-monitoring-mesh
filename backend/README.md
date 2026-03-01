@@ -1,3 +1,7 @@
+# Backend
+
+See the [main README](../README.md) for full documentation.
+
 # Sound Level Mesh System - Backend API
 
 Node.js backend API server for the Sound Level Mesh System.

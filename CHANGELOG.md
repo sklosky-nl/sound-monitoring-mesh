@@ -5,6 +5,20 @@ All notable changes to the Sound Monitoring Mesh System will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1-prod] - 2026-02-28
+
+### Fixed
+- **Critical**: I2S DMA mis-packing caused by using `I2S_DATA_BIT_WIDTH_24BIT` instead of `I2S_DATA_BIT_WIDTH_32BIT` — resulted in constant ~110 dB readings regardless of actual audio level
+- Frequency band SPL calculation rewritten to use self-normalizing energy fraction (avoids dependence on absolute FFT magnitude scale)
+- 10 kΩ pull-down resistor on SD line (GPIO 4 to GND) confirmed required and documented
+
+### Added
+- `2.1.1-prod` firmware binary for production (Nova Labs WiFi + production backend)
+- `2.1.2-dev` firmware binary for development OTA testing (dev WiFi + local backend)
+- Removed legacy `versions-prod.json`; all versions tracked in `versions.json`
+
+---
+
 ## [2.0.0] - 2026-02-12
 
 ### Added
@@ -104,6 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Measurement data collection and storage
 - Alert system for threshold violations
 
-[1.2.0]: https://github.com/yourusername/sound-monitoring-mesh/compare/v1.1.1...v1.2.0
-[1.1.1]: https://github.com/yourusername/sound-monitoring-mesh/compare/v1.0.0...v1.1.1
-[1.0.0]: https://github.com/yourusername/sound-monitoring-mesh/releases/tag/v1.0.0
+[2.1.1-prod]: https://github.com/sklosky-nl/sound-monitoring-mesh/compare/v2.0.0...v2.1.1-prod
+[2.0.0]: https://github.com/sklosky-nl/sound-monitoring-mesh/compare/v1.2.0...v2.0.0
+[1.2.0]: https://github.com/sklosky-nl/sound-monitoring-mesh/compare/v1.1.1...v1.2.0
+[1.1.1]: https://github.com/sklosky-nl/sound-monitoring-mesh/compare/v1.0.0...v1.1.1
+[1.0.0]: https://github.com/sklosky-nl/sound-monitoring-mesh/releases/tag/v1.0.0

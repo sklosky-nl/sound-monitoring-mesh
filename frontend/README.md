@@ -1,3 +1,7 @@
+# Frontend
+
+See the [main README](../README.md) for full documentation.
+
 # Sound Level Mesh System - Frontend
 
 Web-based dashboard for monitoring and managing sound level sensors.
