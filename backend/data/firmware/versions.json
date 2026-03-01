@@ -39,6 +39,22 @@
       "releaseDate": "2026-02-12T00:00:00.000Z",
       "description": "CRITICAL UPDATE: Continuous sampling with peak detection - Captures 100% of sound instead of 6.4%. Reports both RMS average and peak dB values. Fixes issue where loud noise events were being missed.",
       "sha256": "961f3c3a5b8a682cc3a3939853b78cae7c0072680515afdc4bd66af8f9e45796"
+    },
+    {
+      "version": "2.1.1-prod",
+      "filename": "sound-sensor-2.1.1-prod.bin",
+      "size": 1061216,
+      "releaseDate": "2026-02-28T00:00:00.000Z",
+      "description": "Fix I2S DMA mis-packing (24-bit→32-bit data width) that caused constant ~110 dB readings. Fix frequency band SPL calculation using self-normalizing energy fraction. 10K pull-down on SD line confirmed required.",
+      "sha256": "25c1773168248509d1de1da2028ebb7ada35d9f49adc7dc4e23812d8ad6ebba5"
+    },
+    {
+      "version": "2.1.2-dev",
+      "filename": "sound-sensor-2.1.2-dev.bin",
+      "size": 1061264,
+      "releaseDate": "2026-02-28T00:00:00.000Z",
+      "description": "Dev build: same fixes as 2.1.1-prod, built with dev WiFi and local backend server for OTA testing.",
+      "sha256": "16fd278f647a58d76ab78a59ca98cb6286b573707a301e23b968445819505ba3"
     }
   ]
 }

@@ -31,7 +31,7 @@
 #include "driver/gpio.h"
 
 // Firmware Version
-#define FIRMWARE_VERSION "2.1.1-prod"
+#define FIRMWARE_VERSION "2.1.2-dev"
 
 // Configuration
 // Device ID will be set dynamically based on MAC address
@@ -145,7 +145,7 @@ static void audio_sampling_task(void *pvParameters);
 static float calculate_db_level(float* magnitude, int size);
 static float calculate_dbfs(float* samples, int size);
 static float calculate_dbfs_from_i2s(const int32_t* buffer, int size, int mode, int32_t* peak_abs_out);
-static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sample_rate);
+static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sample_rate, float overall_db);
 static void apply_hamming_window(float* samples, int size);
 static esp_err_t send_measurement_data(float db_level, float db_peak, freq_band_t* bands, int num_bands);
 static void ota_task(void *pvParameters);
@@ -619,48 +619,45 @@ static float calculate_dbfs_from_i2s(const int32_t* buffer, int size, int mode, 
     return 20.0f * log10f(rms);
 }
 
-// Calculate frequency band levels with A-weighting
-static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sample_rate)
+// Calculate frequency band levels anchored to measured time-domain db_level
+static void calculate_frequency_bands(float* fft_magnitude, int fft_size, int sample_rate, float overall_db)
 {
+    // First pass: compute total FFT energy across all useful bins (skip DC at 0)
+    float total_sum_sq = 0.0f;
+    for (int i = 1; i < fft_size / 2; i++) {
+        total_sum_sq += fft_magnitude[i] * fft_magnitude[i];
+    }
+    if (total_sum_sq < 1e-20f) {
+        // No signal - floor all bands
+        for (int band = 0; band < NUM_BANDS; band++) {
+            frequency_bands[band].level = 30.0f;
+        }
+        return;
+    }
+
     float freq_resolution = (float)sample_rate / fft_size;
-    
+
     for (int band = 0; band < NUM_BANDS; band++) {
         int start_bin = (int)(frequency_bands[band].start_freq / freq_resolution);
-        int end_bin = (int)(frequency_bands[band].end_freq / freq_resolution);
-        
-        if (end_bin >= fft_size / 2) {
-            end_bin = fft_size / 2 - 1;
-        }
-        
-        float sum = 0;
-        int count = 0;
+        int end_bin   = (int)(frequency_bands[band].end_freq   / freq_resolution);
+        if (start_bin < 1) start_bin = 1;
+        if (end_bin >= fft_size / 2) end_bin = fft_size / 2 - 1;
+
+        float band_sum_sq = 0.0f;
         for (int i = start_bin; i <= end_bin; i++) {
-            // Calculate frequency for this bin
-            float freq = i * freq_resolution;
-            
-            // Apply A-weighting
-            float a_weight_db = calculate_a_weighting(freq);
-            float a_weight_linear = powf(10.0f, a_weight_db / 20.0f);
-            
-            // Apply weighting to magnitude
-            float weighted_magnitude = fft_magnitude[i] * a_weight_linear;
-            
-            sum += weighted_magnitude * weighted_magnitude;
-            count++;
+            band_sum_sq += fft_magnitude[i] * fft_magnitude[i];
         }
-        
-        if (count > 0) {
-            float rms = sqrtf(sum / count);
-            float db = 20.0f * log10f(rms + 1e-10f);
-            
-            // Clamp to reasonable range
-            if (db < 0) db = 0;
-            if (db > 130) db = 130;
-            
-            frequency_bands[band].level = db;
-        } else {
-            frequency_bands[band].level = 0;
-        }
+
+        // Band SPL = overall SPL + 10*log10(band_energy / total_energy)
+        // Self-calibrating: independent of FFT scale factor
+        float fraction = band_sum_sq / total_sum_sq;
+        if (fraction < 1e-10f) fraction = 1e-10f;
+        float db = overall_db + 10.0f * log10f(fraction);
+
+        if (db < 30.0f)  db = 30.0f;
+        if (db > 120.0f) db = 120.0f;
+
+        frequency_bands[band].level = db;
     }
 }
 
@@ -835,7 +832,7 @@ static void audio_sampling_task(void *pvParameters)
         dsps_fft2r_fc32(fft_input, FFT_SIZE);
         dsps_bit_rev_fc32(fft_input, FFT_SIZE);
         
-        // Calculate magnitude
+        // Calculate magnitude (unnormalized DFT output)
         for (int i = 0; i < FFT_SIZE / 2; i++) {
             float real = fft_input[i * 2];
             float imag = fft_input[i * 2 + 1];
@@ -843,7 +840,7 @@ static void audio_sampling_task(void *pvParameters)
         }
         
         // Calculate frequency band levels
-        calculate_frequency_bands(fft_magnitude, FFT_SIZE, I2S_SAMPLE_RATE);
+        calculate_frequency_bands(fft_magnitude, FFT_SIZE, I2S_SAMPLE_RATE, db_level);
         
         // Track peak and RMS over the reporting window
         if (peak_db > peak_db_window) {
@@ -1141,27 +1138,51 @@ static esp_err_t check_and_perform_ota_update(void)
     ESP_LOGI(TAG, "Starting OTA update to version %s from %s", new_version, full_download_url);
     
     // Perform the OTA update
+    // skip_cert_common_name_check allows plain http:// URLs as well as https://
     esp_http_client_config_t ota_config = {
         .url = full_download_url,
         .event_handler = ota_http_event_handler,
         .timeout_ms = 30000,
         .buffer_size = OTA_BUFFER_SIZE,
+        .skip_cert_common_name_check = true,
     };
     
     esp_https_ota_config_t https_ota_config = {
         .http_config = &ota_config,
     };
-    
-    esp_err_t ota_err = esp_https_ota(&https_ota_config);
+
+    ESP_LOGI(TAG, "Starting OTA download from: %s", full_download_url);
+    esp_https_ota_handle_t ota_handle = NULL;
+    esp_err_t ota_err = esp_https_ota_begin(&https_ota_config, &ota_handle);
+    if (ota_err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_https_ota_begin failed: %s", esp_err_to_name(ota_err));
+        cJSON_Delete(json);
+        return ota_err;
+    }
+
+    while (1) {
+        ota_err = esp_https_ota_perform(ota_handle);
+        if (ota_err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) break;
+        ESP_LOGD(TAG, "OTA progress: %d bytes written", esp_https_ota_get_image_len_read(ota_handle));
+    }
+
+    if (esp_https_ota_is_complete_data_received(ota_handle) != true) {
+        ESP_LOGE(TAG, "OTA incomplete - not all data received");
+        esp_https_ota_abort(ota_handle);
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+
+    esp_err_t finish_err = esp_https_ota_finish(ota_handle);
     cJSON_Delete(json);
-    
-    if (ota_err == ESP_OK) {
+
+    if (finish_err == ESP_OK) {
         ESP_LOGI(TAG, "OTA update successful! Rebooting...");
         vTaskDelay(pdMS_TO_TICKS(1000));
         esp_restart();
     } else {
-        ESP_LOGE(TAG, "OTA update failed: %s", esp_err_to_name(ota_err));
-        return ota_err;
+        ESP_LOGE(TAG, "OTA finish failed: %s", esp_err_to_name(finish_err));
+        return finish_err;
     }
     
     return ESP_OK;
@@ -1172,8 +1193,8 @@ static void ota_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "OTA task started");
     
-    // Wait 5 minutes before first check to let device stabilize
-    vTaskDelay(pdMS_TO_TICKS(300000));
+    // Wait 30 seconds before first check to let device stabilize
+    vTaskDelay(pdMS_TO_TICKS(30000));
     
     while (1) {
         // Check if WiFi is connected
